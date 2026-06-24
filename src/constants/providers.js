@@ -1,0 +1,20 @@
+export const PROVIDERS = [
+  { name: 'Conad', color: '#E53935', barcodeFormat: 'EAN13' },
+  { name: 'Esselunga', color: '#F57C00', barcodeFormat: 'EAN13' },
+  { name: 'Carrefour', color: '#1565C0', barcodeFormat: 'EAN13' },
+  { name: 'Coop', color: '#D32F2F', barcodeFormat: 'EAN13' },
+  { name: 'Lidl', color: '#0050AA', barcodeFormat: 'EAN13' },
+  { name: 'Eurospin', color: '#FFD600', barcodeFormat: 'EAN13' },
+  { name: 'IKEA Family', color: '#0051BA', barcodeFormat: 'CODE128' },
+  { name: 'Decathlon', color: '#0066CC', barcodeFormat: 'EAN13' },
+  { name: 'MediaWorld', color: '#E60012', barcodeFormat: 'CODE128' },
+  { name: 'Unieuro', color: '#ED1C24', barcodeFormat: 'CODE128' },
+  { name: 'OVS', color: '#000000', barcodeFormat: 'CODE128' },
+  { name: 'Feltrinelli', color: '#C62828', barcodeFormat: 'CODE128' },
+  { name: 'Tigotà', color: '#E91E63', barcodeFormat: 'EAN13' },
+  { name: 'Acqua & Sapone', color: '#00BCD4', barcodeFormat: 'EAN13' },
+  { name: 'Penny Market', color: '#D50000', barcodeFormat: 'EAN13' },
+  { name: 'PAM', color: '#1B5E20', barcodeFormat: 'EAN13' },
+  { name: 'Despar', color: '#388E3C', barcodeFormat: 'EAN13' },
+  { name: 'MD', color: '#FF6F00', barcodeFormat: 'EAN13' }
+];
