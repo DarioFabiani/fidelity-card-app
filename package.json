@@ -1,0 +1,23 @@
+{
+  "name": "fidelity-card-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "idb": "^8.0.1",
+    "jsbarcode": "^3.11.6",
+    "preact": "^10.25.4",
+    "preact-router": "^4.1.2",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.3",
+    "vite": "^6.0.7",
+    "vite-plugin-pwa": "^0.21.1"
+  }
+}
