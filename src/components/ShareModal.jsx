@@ -41,7 +41,9 @@ export function ShareModal({ card, onClose, showToast }) {
         <h3 class="share-title">Condividi {card.providerName}</h3>
 
         <div class="share-qr">
-          <canvas ref={canvasRef} />
+          <div class="share-qr-frame">
+            <canvas ref={canvasRef} />
+          </div>
           <p class="share-qr-hint">Scansiona il QR code con un altro telefono</p>
         </div>
 
@@ -76,8 +78,14 @@ export function ShareModal({ card, onClose, showToast }) {
             align-items: center;
             margin-bottom: 20px;
           }
+          .share-qr-frame {
+            padding: 16px;
+            background: var(--color-primary-container);
+            border-radius: var(--radius);
+          }
           .share-qr canvas {
-            border-radius: var(--radius-sm);
+            display: block;
+            border-radius: var(--radius-xs);
           }
           .share-qr-hint {
             font-size: 13px;

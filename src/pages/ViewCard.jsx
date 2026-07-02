@@ -105,7 +105,7 @@ export function ViewCard({ id, showToast }) {
 
       <style>{`
         .view-card-header {
-          border-radius: var(--radius);
+          border-radius: var(--radius-lg);
           padding: 24px;
           color: #FFFFFF;
           text-align: center;

@@ -6,10 +6,11 @@ export function Toast({ message, type = 'success', onClose }) {
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const bg = type === 'error' ? 'var(--color-danger)' : 'var(--color-success)';
+  const bg = type === 'error' ? 'var(--color-danger-container)' : 'var(--color-tertiary-container)';
+  const color = type === 'error' ? 'var(--color-on-danger-container)' : 'var(--color-on-tertiary-container)';
 
   return (
-    <div class="toast" style={{ background: bg }} onClick={onClose}>
+    <div class="toast" style={{ background: bg, color }} onClick={onClose}>
       {message}
       <style>{`
         .toast {
@@ -17,9 +18,8 @@ export function Toast({ message, type = 'success', onClose }) {
           bottom: 90px;
           left: 50%;
           transform: translateX(-50%);
-          color: #FFFFFF;
-          padding: 12px 24px;
-          border-radius: var(--radius-sm);
+          padding: 14px 24px;
+          border-radius: var(--radius-full);
           font-size: 14px;
           font-weight: 500;
           box-shadow: var(--shadow-md);

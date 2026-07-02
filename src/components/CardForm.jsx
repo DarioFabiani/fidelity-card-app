@@ -10,7 +10,17 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   const [notes, setNotes] = useState(initial?.notes || '');
   const [suggestions, setSuggestions] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [ScannerComponent, setScannerComponent] = useState(null);
   const formRef = useRef(null);
+
+  const openScanner = async () => {
+    if (!ScannerComponent) {
+      const mod = await import('./CameraScanner');
+      setScannerComponent(() => mod.CameraScanner);
+    }
+    setScanning(true);
+  };
 
   const handleProviderInput = (value) => {
     setProviderName(value);
@@ -36,6 +46,12 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
       const suggested = suggestFormat(value);
       setBarcodeFormat(suggested);
     }
+  };
+
+  const handleScan = (text, format) => {
+    setScanning(false);
+    setCardNumber(text);
+    setBarcodeFormat(format);
   };
 
   const handleSubmit = async (e) => {
@@ -84,14 +100,28 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
 
       <div class="form-group">
         <label class="form-label">Numero carta *</label>
-        <input
-          type="text"
-          value={cardNumber}
-          onInput={e => handleCardNumberInput(e.target.value)}
-          placeholder="Numero o codice a barre"
-          required
-          inputMode="numeric"
-        />
+        <div class="card-number-row">
+          <input
+            type="text"
+            value={cardNumber}
+            onInput={e => handleCardNumberInput(e.target.value)}
+            placeholder="Numero o codice a barre"
+            required
+            inputMode="numeric"
+          />
+          <button
+            type="button"
+            class="scan-trigger"
+            onClick={openScanner}
+            aria-label="Scansiona con la fotocamera"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" />
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+              <rect x="7" y="7" width="10" height="10" rx="1" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="form-group">
@@ -132,6 +162,10 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
         {submitting ? 'Salvataggio...' : submitLabel}
       </button>
 
+      {scanning && ScannerComponent && (
+        <ScannerComponent onDetect={handleScan} onClose={() => setScanning(false)} />
+      )}
+
       <style>{`
         .card-form {
           display: flex;
@@ -150,6 +184,29 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
           color: var(--color-text-secondary);
           text-transform: uppercase;
           letter-spacing: 0.5px;
+        }
+        .card-number-row {
+          display: flex;
+          gap: 8px;
+          align-items: stretch;
+        }
+        .card-number-row input {
+          flex: 1;
+          min-width: 0;
+        }
+        .scan-trigger {
+          flex-shrink: 0;
+          width: 48px;
+          border-radius: var(--radius-sm);
+          background: var(--color-primary-container);
+          color: var(--color-on-primary-container);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: opacity 0.15s, transform 0.1s;
+        }
+        .scan-trigger:active {
+          transform: scale(0.94);
         }
         .suggestions {
           position: absolute;

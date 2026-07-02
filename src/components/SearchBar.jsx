@@ -27,10 +27,13 @@ export function SearchBar({ value, onInput }) {
         }
         .search-input {
           padding-left: 40px;
-          border-radius: 24px;
-          background: var(--color-surface);
-          border: 1px solid var(--color-border);
-          height: 44px;
+          border-radius: var(--radius-full);
+          background: var(--color-surface-variant);
+          border: none;
+          height: 48px;
+        }
+        .search-input:focus {
+          background: var(--color-surface-variant);
         }
       `}</style>
     </div>

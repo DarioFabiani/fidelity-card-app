@@ -31,7 +31,7 @@ export function CardItem({ card }) {
           justify-content: space-between;
           width: 100%;
           padding: 20px;
-          border-radius: var(--radius);
+          border-radius: var(--radius-lg);
           box-shadow: var(--shadow-sm);
           transition: transform 0.15s, box-shadow 0.15s;
           -webkit-tap-highlight-color: transparent;

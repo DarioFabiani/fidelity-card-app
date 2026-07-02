@@ -25,8 +25,8 @@ export function Header() {
           left: 0;
           right: 0;
           height: var(--header-height);
-          background: var(--color-primary);
-          color: #FFFFFF;
+          background: var(--color-surface);
+          color: var(--color-text);
           z-index: 150;
           box-shadow: var(--shadow-sm);
         }
@@ -42,10 +42,13 @@ export function Header() {
         .header-title {
           font-size: 18px;
           font-weight: 700;
-          color: #FFFFFF;
+          color: var(--color-primary);
         }
         .header-settings {
-          color: #FFFFFF;
+          color: var(--color-text-secondary);
+        }
+        .header-settings:active {
+          background: var(--color-surface-variant);
         }
       `}</style>
     </header>
