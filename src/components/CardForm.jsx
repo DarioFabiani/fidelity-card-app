@@ -1,6 +1,7 @@
 import { useState, useRef } from 'preact/hooks';
 import { PROVIDERS } from '../constants/providers';
 import { BARCODE_FORMATS, suggestFormat } from '../constants/barcodeFormats';
+import { BarcodeScanner } from './BarcodeScanner';
 
 export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   const [providerName, setProviderName] = useState(initial?.providerName || '');
@@ -10,6 +11,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   const [notes, setNotes] = useState(initial?.notes || '');
   const [suggestions, setSuggestions] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const formRef = useRef(null);
 
   const handleProviderInput = (value) => {
@@ -38,6 +40,12 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
     }
   };
 
+  const handleScan = (code, format) => {
+    setCardNumber(code);
+    setBarcodeFormat(format);
+    setScanning(false);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!providerName.trim() || !cardNumber.trim()) return;
@@ -56,6 +64,10 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   };
 
   return (
+    <>
+    {scanning && (
+      <BarcodeScanner onScan={handleScan} onClose={() => setScanning(false)} />
+    )}
     <form ref={formRef} class="card-form" onSubmit={handleSubmit}>
       <div class="form-group">
         <label class="form-label">Nome negozio *</label>
@@ -84,14 +96,22 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
 
       <div class="form-group">
         <label class="form-label">Numero carta *</label>
-        <input
-          type="text"
-          value={cardNumber}
-          onInput={e => handleCardNumberInput(e.target.value)}
-          placeholder="Numero o codice a barre"
-          required
-          inputMode="numeric"
-        />
+        <div class="card-number-row">
+          <input
+            type="text"
+            value={cardNumber}
+            onInput={e => handleCardNumberInput(e.target.value)}
+            placeholder="Numero o codice a barre"
+            required
+            inputMode="numeric"
+          />
+          <button type="button" class="scan-btn" onClick={() => setScanning(true)} title="Scansiona con fotocamera">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="form-group">
@@ -182,6 +202,32 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
           border-radius: 50%;
           flex-shrink: 0;
         }
+        .card-number-row {
+          display: flex;
+          gap: 8px;
+          align-items: stretch;
+        }
+        .card-number-row input {
+          flex: 1;
+          min-width: 0;
+        }
+        .scan-btn {
+          flex-shrink: 0;
+          width: 44px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--color-primary);
+          color: #fff;
+          border: none;
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+        .scan-btn:hover {
+          background: var(--color-primary-dark);
+        }
         .color-picker {
           display: flex;
           align-items: center;
@@ -202,5 +248,6 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
         }
       `}</style>
     </form>
+    </>
   );
 }
