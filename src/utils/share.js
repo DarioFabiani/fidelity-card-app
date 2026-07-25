@@ -32,6 +32,19 @@ function generateShareCode() {
   return code;
 }
 
+function toBase64Url(value) {
+  return value.replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+/**
+ * Back to standard base64. Links made before the switch contain '+' and '/'
+ * already, and those characters never appear in base64url — so the two
+ * alphabets are disjoint and this one function reads both formats.
+ */
+function fromBase64Url(value) {
+  return value.replace(/-/g, '+').replace(/_/g, '/');
+}
+
 /** Groups the code in two blocks so it is easier to read out: ABCD-EFGH. */
 export function formatShareCode(code) {
   return code.length === CODE_LENGTH
@@ -91,7 +104,11 @@ export async function encodeCardForShare(card) {
   const key = await deriveKey(code, salt);
   const sealed = await encryptJSON(payload, key);
 
-  const combined = `${bufferToBase64(salt)}.${sealed}`;
+  // base64url: standard base64 puts '+' and '/' in the string, which any
+  // URLSearchParams-based reader would mangle ('+' becomes a space) and mail
+  // clients like to re-encode. Swapping them keeps the link intact through
+  // naive parsers, and costs nothing to reverse on the way in.
+  const combined = toBase64Url(`${bufferToBase64(salt)}.${sealed}`);
   const base = window.location.origin + '/fidelity-card-app/';
   return { url: `${base}shared?data=${combined}`, code };
 }
@@ -108,8 +125,8 @@ export async function decodeSharedCard(dataParam, code) {
   const separatorIndex = dataParam.indexOf('.');
   if (separatorIndex <= 0 || separatorIndex === dataParam.length - 1) return null;
 
-  const saltB64 = dataParam.slice(0, separatorIndex);
-  const sealed = dataParam.slice(separatorIndex + 1);
+  const saltB64 = fromBase64Url(dataParam.slice(0, separatorIndex));
+  const sealed = fromBase64Url(dataParam.slice(separatorIndex + 1));
 
   try {
     const salt = base64ToBuffer(saltB64);
