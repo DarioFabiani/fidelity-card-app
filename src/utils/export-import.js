@@ -83,22 +83,46 @@ export function pickImportFile() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,application/json';
+
+    // Guard so the two paths below can never both settle the promise.
+    let settled = false;
+    const finish = (fn) => (value) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener('focus', onFocus);
+      fn(value);
+    };
+    const done = finish(resolve);
+    const fail = finish(reject);
+
     // Dismissing the picker fires `cancel`, never `change`. Without this the
     // promise would hang forever and leave the import button disabled.
-    input.addEventListener('cancel', () => resolve(null));
+    input.addEventListener('cancel', () => done(null));
+
+    // `cancel` only exists in Chrome 113+ / Safari 16.4+. Elsewhere, falling
+    // back on focus alone is unsafe — focus often returns before `change` is
+    // delivered, and a large file widens that gap. Checking files.length after
+    // a delay is the reliable signal: empty really does mean dismissed.
+    function onFocus() {
+      setTimeout(() => {
+        if (!settled && input.files.length === 0) done(null);
+      }, 800);
+    }
+    window.addEventListener('focus', onFocus);
+
     input.onchange = async (e) => {
       const file = e.target.files[0];
-      if (!file) return resolve(null);
+      if (!file) return done(null);
       try {
         const parsed = JSON.parse(await file.text());
         if (parsed && parsed.encrypted) {
           if (!parsed.salt || !parsed.data) throw new Error('File di backup corrotto');
-          resolve({ encrypted: true, salt: parsed.salt, data: parsed.data });
+          done({ encrypted: true, salt: parsed.salt, data: parsed.data });
         } else {
-          resolve({ encrypted: false, cards: validateCards(parsed) });
+          done({ encrypted: false, cards: validateCards(parsed) });
         }
       } catch (err) {
-        reject(err instanceof SyntaxError ? new Error('Formato non valido') : err);
+        fail(err instanceof SyntaxError ? new Error('Formato non valido') : err);
       }
     };
     input.click();
