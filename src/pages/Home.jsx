@@ -5,6 +5,7 @@ import { SearchBar } from '../components/SearchBar';
 import { CardList } from '../components/CardList';
 import { EmptyState } from '../components/EmptyState';
 import { InstallPrompt } from '../components/InstallPrompt';
+import { PageMessage } from '../components/PageMessage';
 
 export function Home() {
   const { cards, loading } = useCards();
@@ -17,15 +18,13 @@ export function Home() {
       )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-secondary)' }}>
-          Caricamento...
-        </div>
+        <PageMessage>Caricamento...</PageMessage>
       ) : cards.length === 0 ? (
-        <EmptyState />
+        <EmptyState onAdd={() => route('/fidelity-card-app/add')} />
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--color-text-secondary)', fontSize: '14px' }}>
-          Nessun risultato per "{query}"
-        </div>
+        <PageMessage title="Nessun risultato">
+          Nessuna carta corrisponde a "{query}".
+        </PageMessage>
       ) : (
         <CardList cards={filtered} />
       )}
@@ -35,7 +34,10 @@ export function Home() {
         onClick={() => route('/fidelity-card-app/add')}
         aria-label="Aggiungi carta"
       >
-        +
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
       </button>
 
       <InstallPrompt />

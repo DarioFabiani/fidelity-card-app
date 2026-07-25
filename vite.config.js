@@ -8,7 +8,7 @@ export default defineConfig({
     preact(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'icons/*.png'],
+      includeAssets: ['favicon.ico', 'icons/*.png', 'icons/icon.svg'],
       manifest: {
         name: 'Le Mie Carte Fedeltà',
         short_name: 'Carte Fedeltà',

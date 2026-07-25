@@ -1,12 +1,30 @@
-export function EmptyState() {
+export function EmptyState({ onAdd }) {
   return (
     <div class="empty-state">
-      <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }}>
-        <rect x="2" y="5" width="20" height="14" rx="2" />
-        <line x1="2" y1="10" x2="22" y2="10" />
-      </svg>
+      <div class="empty-illustration" aria-hidden="true">
+        <div class="empty-card empty-card-back" />
+        <div class="empty-card empty-card-front">
+          <div class="empty-barcode">
+            {Array.from({ length: 14 }).map((_, i) => (
+              <span key={i} style={{ width: i % 3 === 0 ? '4px' : '2px' }} />
+            ))}
+          </div>
+        </div>
+      </div>
+
       <h2>Nessuna carta salvata</h2>
-      <p>Tocca il pulsante + per aggiungere la tua prima carta fedeltà</p>
+      <p>Aggiungi la tua prima tessera fedeltà: potrai mostrarla alla cassa senza portarti dietro la plastica.</p>
+
+      {onAdd && (
+        <button class="btn btn-primary" onClick={onAdd}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Aggiungi carta
+        </button>
+      )}
+
       <style>{`
         .empty-state {
           display: flex;
@@ -14,17 +32,58 @@ export function EmptyState() {
           align-items: center;
           justify-content: center;
           text-align: center;
-          padding: 48px 24px;
-          gap: 12px;
+          padding: 40px 24px;
+          gap: var(--space-3);
+        }
+        .empty-illustration {
+          position: relative;
+          width: 150px;
+          height: 100px;
+          margin-bottom: var(--space-4);
+        }
+        .empty-card {
+          position: absolute;
+          border-radius: 10px;
+          box-shadow: var(--shadow-md);
+        }
+        .empty-card-back {
+          inset: 0 14px 16px 0;
+          background: var(--color-border);
+          transform: rotate(-8deg);
+        }
+        .empty-card-front {
+          inset: 12px 0 0 14px;
+          background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+          transform: rotate(4deg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .empty-barcode {
+          display: flex;
+          align-items: center;
+          gap: 3px;
+          height: 34px;
+        }
+        .empty-barcode span {
+          display: block;
+          height: 100%;
+          background: rgba(255,255,255,0.85);
+          border-radius: 1px;
         }
         .empty-state h2 {
-          font-size: 18px;
+          font-size: var(--text-lg);
+          font-weight: 700;
           color: var(--color-text);
         }
         .empty-state p {
-          font-size: 14px;
+          font-size: var(--text-sm);
           color: var(--color-text-secondary);
-          max-width: 250px;
+          max-width: 290px;
+          line-height: 1.6;
+        }
+        .empty-state .btn {
+          margin-top: var(--space-2);
         }
       `}</style>
     </div>

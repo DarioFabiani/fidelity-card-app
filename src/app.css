@@ -10,12 +10,31 @@
   --color-border: #E0E0E0;
   --color-danger: #D32F2F;
   --color-success: #388E3C;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
-  --shadow-md: 0 2px 8px rgba(0,0,0,0.15);
-  --shadow-lg: 0 4px 16px rgba(0,0,0,0.2);
-  --radius: 12px;
-  --radius-sm: 8px;
+  --color-header-from: #1565C0;
+  --color-header-to: #0D47A1;
+  --shadow-sm: 0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.10);
+  --shadow-md: 0 4px 8px -2px rgba(16,24,40,0.10), 0 2px 4px -2px rgba(16,24,40,0.06);
+  --shadow-lg: 0 12px 20px -4px rgba(16,24,40,0.12), 0 4px 8px -4px rgba(16,24,40,0.08);
+  --radius-lg: 18px;
+  --radius: 14px;
+  --radius-sm: 10px;
   --header-height: 56px;
+
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 26px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  --font-mono: ui-monospace, 'SF Mono', 'Menlo', 'Roboto Mono', monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -28,9 +47,12 @@
     --color-text: #E0E0E0;
     --color-text-secondary: #9E9E9E;
     --color-border: #333333;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-    --shadow-md: 0 2px 8px rgba(0,0,0,0.4);
-    --shadow-lg: 0 4px 16px rgba(0,0,0,0.5);
+    /* Keeps white header text legible: the light-mode blues are too bright on dark. */
+    --color-header-from: #10315A;
+    --color-header-to: #0A2342;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.35);
+    --shadow-md: 0 4px 10px rgba(0,0,0,0.45);
+    --shadow-lg: 0 12px 24px rgba(0,0,0,0.55);
   }
 }
 
@@ -87,17 +109,25 @@ input, textarea, select {
   padding: 12px;
   width: 100%;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 input:focus, textarea:focus, select:focus {
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+/* Inputs style their own focus ring above, so only other controls need this. */
+:focus-visible:not(input):not(textarea):not(select) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .page {
   flex: 1;
-  padding: 16px;
-  padding-top: calc(var(--header-height) + 16px);
+  padding: var(--space-4);
+  padding-top: calc(var(--header-height) + env(safe-area-inset-top) + var(--space-4));
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
   max-width: 600px;
   margin: 0 auto;
   width: 100%;
@@ -107,12 +137,13 @@ input:focus, textarea:focus, select:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
+  min-height: 44px;
   padding: 12px 24px;
   border-radius: var(--radius-sm);
   font-weight: 600;
-  font-size: 14px;
-  transition: opacity 0.2s, transform 0.1s;
+  font-size: var(--text-sm);
+  transition: opacity 0.2s, transform 0.1s, background 0.2s;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -155,8 +186,8 @@ input:focus, textarea:focus, select:focus {
 
 .fab {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: calc(var(--space-6) + env(safe-area-inset-bottom) + var(--fab-offset, 0px));
+  right: var(--space-6);
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -168,11 +199,16 @@ input:focus, textarea:focus, select:focus {
   justify-content: center;
   font-size: 28px;
   z-index: 100;
-  transition: transform 0.2s;
+  transition: transform 0.2s, bottom 0.25s ease;
 }
 
 .fab:active {
   transform: scale(0.92);
+}
+
+/* Lifts the FAB above the install banner so the two never overlap. */
+body.has-install-banner {
+  --fab-offset: 68px;
 }
 
 .modal-overlay {

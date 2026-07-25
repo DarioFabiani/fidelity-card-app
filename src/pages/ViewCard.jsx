@@ -3,6 +3,9 @@ import { useState, useEffect } from 'preact/hooks';
 import { getCard, deleteCard } from '../db';
 import { BarcodeDisplay } from '../components/BarcodeDisplay';
 import { ShareModal } from '../components/ShareModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { PageMessage } from '../components/PageMessage';
+import { getContrastColor, cardGradient } from '../utils/color';
 
 export function ViewCard({ id, showToast }) {
   const [card, setCard] = useState(null);
@@ -36,10 +39,7 @@ export function ViewCard({ id, showToast }) {
   }, []);
 
   const handleDelete = async () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
+    setConfirmDelete(false);
     await deleteCard(id);
     showToast('Carta eliminata');
     route('/fidelity-card-app/');
@@ -47,23 +47,45 @@ export function ViewCard({ id, showToast }) {
 
   if (loading) {
     return (
-      <div class="page" style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-secondary)' }}>
-        Caricamento...
+      <div class="page">
+        <PageMessage>Caricamento...</PageMessage>
       </div>
     );
   }
 
   if (!card) {
     return (
-      <div class="page" style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-secondary)' }}>
-        Carta non trovata
+      <div class="page">
+        <PageMessage
+          title="Carta non trovata"
+          action={
+            <button class="btn btn-primary" onClick={() => route('/fidelity-card-app/')}>
+              Vai alle mie carte
+            </button>
+          }
+        >
+          La carta che stai cercando non esiste più.
+        </PageMessage>
       </div>
     );
   }
 
+  const cardColor = card.color || '#1565C0';
+
   return (
     <div class="page">
-      <div class="view-card-header" style={{ background: card.color }}>
+      <button class="view-back" onClick={() => route('/fidelity-card-app/')} aria-label="Torna alle mie carte">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12" />
+          <polyline points="12 19 5 12 12 5" />
+        </svg>
+        Le mie carte
+      </button>
+
+      <div
+        class="view-card-header"
+        style={{ background: cardGradient(cardColor), color: getContrastColor(cardColor) }}
+      >
         <h2 class="view-card-name">{card.providerName}</h2>
         <p class="view-card-number">{card.cardNumber}</p>
       </div>
@@ -90,12 +112,8 @@ export function ViewCard({ id, showToast }) {
         <button class="btn btn-outline" onClick={() => route(`/fidelity-card-app/edit/${card.id}`)} style={{ flex: 1 }}>
           Modifica
         </button>
-        <button
-          class={`btn ${confirmDelete ? 'btn-danger' : 'btn-outline'}`}
-          onClick={handleDelete}
-          onBlur={() => setConfirmDelete(false)}
-        >
-          {confirmDelete ? 'Conferma' : 'Elimina'}
+        <button class="btn btn-outline btn-delete" onClick={() => setConfirmDelete(true)}>
+          Elimina
         </button>
       </div>
 
@@ -103,45 +121,78 @@ export function ViewCard({ id, showToast }) {
         <ShareModal card={card} onClose={() => setShowShare(false)} showToast={showToast} />
       )}
 
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Eliminare questa carta?"
+          message={`"${card.providerName}" verrà rimossa definitivamente da questo dispositivo. L'operazione non può essere annullata.`}
+          confirmLabel="Elimina"
+          danger
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+
       <style>{`
+        .view-back {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-1);
+          margin-bottom: var(--space-3);
+          margin-left: -4px;
+          padding: var(--space-2) var(--space-2) var(--space-2) 0;
+          font-size: var(--text-sm);
+          font-weight: 600;
+          color: var(--color-text-secondary);
+          -webkit-tap-highlight-color: transparent;
+        }
+        .view-back:active {
+          opacity: 0.6;
+        }
         .view-card-header {
-          border-radius: var(--radius);
-          padding: 24px;
-          color: #FFFFFF;
+          border-radius: var(--radius-lg);
+          padding: var(--space-6);
           text-align: center;
+          box-shadow: var(--shadow-md);
         }
         .view-card-name {
-          font-size: 22px;
+          font-size: var(--text-xl);
           font-weight: 700;
+          letter-spacing: -0.02em;
         }
         .view-card-number {
-          font-size: 14px;
+          font-size: var(--text-sm);
           opacity: 0.9;
-          margin-top: 4px;
-          font-family: 'SF Mono', 'Menlo', monospace;
+          margin-top: var(--space-1);
+          font-family: var(--font-mono);
+          letter-spacing: 0.06em;
         }
         .view-card-notes {
-          margin-top: 16px;
-          padding: 16px;
+          margin-top: var(--space-4);
+          padding: var(--space-4);
           background: var(--color-surface);
-          border-radius: var(--radius-sm);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius);
         }
         .view-card-notes-label {
-          font-size: 12px;
+          font-size: var(--text-xs);
           font-weight: 600;
           color: var(--color-text-secondary);
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
         .view-card-notes p {
-          margin-top: 4px;
-          font-size: 14px;
+          margin-top: var(--space-1);
+          font-size: var(--text-sm);
         }
         .view-card-actions {
           display: flex;
-          gap: 10px;
-          margin-top: 20px;
+          gap: var(--space-2);
+          margin-top: var(--space-5);
           flex-wrap: wrap;
+        }
+        .btn-delete {
+          color: var(--color-danger);
+          border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
         }
       `}</style>
     </div>

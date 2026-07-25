@@ -1,6 +1,8 @@
 import { useState } from 'preact/hooks';
+import { route } from 'preact-router';
 import { downloadExport, uploadImport } from '../utils/export-import';
 import { getAllCards, isEncryptionEnabled, enableEncryption, disableEncryption } from '../db';
+import { PageHeader } from '../components/PageHeader';
 
 function EncryptionSetupModal({ onClose, onEnabled, showToast }) {
   const [password, setPassword] = useState('');
@@ -146,9 +148,7 @@ export function Settings({ showToast }) {
 
   return (
     <div class="page">
-      <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '24px' }}>
-        Impostazioni
-      </h2>
+      <PageHeader title="Impostazioni" onBack={() => route('/fidelity-card-app/')} />
 
       <div class="settings-section">
         <h3 class="settings-section-title">Dati</h3>

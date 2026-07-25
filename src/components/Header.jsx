@@ -24,25 +24,28 @@ export function Header() {
           top: 0;
           left: 0;
           right: 0;
-          height: var(--header-height);
-          background: var(--color-primary);
+          height: calc(var(--header-height) + env(safe-area-inset-top));
+          padding-top: env(safe-area-inset-top);
+          background: linear-gradient(135deg, var(--color-header-from), var(--color-header-to));
           color: #FFFFFF;
           z-index: 150;
-          box-shadow: var(--shadow-sm);
+          box-shadow: var(--shadow-md);
         }
         .header-inner {
           max-width: 600px;
           margin: 0 auto;
-          height: 100%;
+          height: var(--header-height);
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 0 16px;
+          padding: 0 var(--space-4);
         }
         .header-title {
-          font-size: 18px;
+          font-size: var(--text-lg);
           font-weight: 700;
+          letter-spacing: -0.01em;
           color: #FFFFFF;
+          -webkit-tap-highlight-color: transparent;
         }
         .header-settings {
           color: #FFFFFF;

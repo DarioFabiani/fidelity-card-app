@@ -1,59 +1,76 @@
 import { route } from 'preact-router';
-
-function getContrastColor(hex) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.5 ? '#000000' : '#FFFFFF';
-}
+import { getContrastColor, cardGradient } from '../utils/color';
 
 export function CardItem({ card }) {
-  const textColor = getContrastColor(card.color || '#1565C0');
+  const color = card.color || '#1565C0';
+  const textColor = getContrastColor(color);
 
   return (
     <button
       class="card-item"
-      style={{ background: card.color || '#1565C0', color: textColor }}
+      style={{ background: cardGradient(color), color: textColor }}
       onClick={() => route(`/fidelity-card-app/card/${card.id}`)}
     >
       <div class="card-item-content">
         <span class="card-provider">{card.providerName}</span>
         <span class="card-number">{formatCardNumber(card.cardNumber)}</span>
       </div>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg class="card-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="9 18 15 12 9 6" />
       </svg>
       <style>{`
         .card-item {
+          position: relative;
           display: flex;
           align-items: center;
           justify-content: space-between;
           width: 100%;
-          padding: 20px;
-          border-radius: var(--radius);
-          box-shadow: var(--shadow-sm);
-          transition: transform 0.15s, box-shadow 0.15s;
+          padding: var(--space-5);
+          min-height: 88px;
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-md);
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
           -webkit-tap-highlight-color: transparent;
           text-align: left;
+          overflow: hidden;
+          isolation: isolate;
+        }
+        /* Soft sheen across the card face, keeps flat brand colours from looking dull. */
+        .card-item::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(120% 80% at 100% 0%, rgba(255,255,255,0.18), transparent 60%);
+          pointer-events: none;
+          z-index: -1;
         }
         .card-item:active {
-          transform: scale(0.98);
+          transform: scale(0.985);
+          box-shadow: var(--shadow-sm);
         }
         .card-item-content {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: var(--space-1);
           min-width: 0;
         }
         .card-provider {
-          font-size: 16px;
+          font-size: var(--text-lg);
           font-weight: 700;
+          letter-spacing: -0.01em;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .card-number {
-          font-size: 13px;
-          opacity: 0.85;
-          font-family: 'SF Mono', 'Menlo', monospace;
+          font-size: var(--text-sm);
+          opacity: 0.88;
+          font-family: var(--font-mono);
+          letter-spacing: 0.04em;
+        }
+        .card-chevron {
+          flex-shrink: 0;
+          opacity: 0.7;
         }
       `}</style>
     </button>

@@ -3,6 +3,8 @@ import { useState } from 'preact/hooks';
 import { decodeSharedCard, isValidShareData } from '../utils/share';
 import { addCard } from '../db';
 import { BarcodeDisplay } from '../components/BarcodeDisplay';
+import { PageMessage } from '../components/PageMessage';
+import { getContrastColor, cardGradient } from '../utils/color';
 
 export function SharedCard({ data, showToast }) {
   const [pin, setPin] = useState('');
@@ -49,14 +51,17 @@ export function SharedCard({ data, showToast }) {
 
   if (!validLink) {
     return (
-      <div class="page" style={{ textAlign: 'center', padding: '48px 0' }}>
-        <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>Link non valido</h2>
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px', marginBottom: '20px' }}>
+      <div class="page">
+        <PageMessage
+          title="Link non valido"
+          action={
+            <button class="btn btn-primary" onClick={() => route('/fidelity-card-app/')}>
+              Vai alle mie carte
+            </button>
+          }
+        >
           Il link della carta condivisa non è valido o è corrotto.
-        </p>
-        <button class="btn btn-primary" onClick={() => route('/fidelity-card-app/')}>
-          Vai alle mie carte
-        </button>
+        </PageMessage>
       </div>
     );
   }
@@ -132,28 +137,28 @@ export function SharedCard({ data, showToast }) {
         </p>
       </div>
 
-      <div class="shared-card-header" style={{ background: card.color }}>
+      <div
+        class="shared-card-header"
+        style={{
+          background: cardGradient(card.color || '#1565C0'),
+          color: getContrastColor(card.color || '#1565C0')
+        }}
+      >
         <h2 class="shared-card-name">{card.providerName}</h2>
         <p class="shared-card-number">{card.cardNumber}</p>
       </div>
 
-      <div style={{ marginTop: '16px' }}>
+      <div style={{ marginTop: 'var(--space-4)' }}>
         <BarcodeDisplay value={card.cardNumber} format={card.barcodeFormat} fullscreenable={false} />
       </div>
 
       {card.notes && (
-        <div style={{
-          marginTop: '16px',
-          padding: '16px',
-          background: 'var(--color-surface)',
-          borderRadius: 'var(--radius-sm)',
-          fontSize: '14px'
-        }}>
+        <div class="shared-card-notes">
           {card.notes}
         </div>
       )}
 
-      <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div style={{ marginTop: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
         {saved ? (
           <button class="btn btn-primary btn-block" onClick={() => route('/fidelity-card-app/')}>
             Vai alle mie carte
@@ -167,20 +172,30 @@ export function SharedCard({ data, showToast }) {
 
       <style>{`
         .shared-card-header {
-          border-radius: var(--radius);
-          padding: 24px;
-          color: #FFFFFF;
+          border-radius: var(--radius-lg);
+          padding: var(--space-6);
           text-align: center;
+          box-shadow: var(--shadow-md);
         }
         .shared-card-name {
-          font-size: 22px;
+          font-size: var(--text-xl);
           font-weight: 700;
+          letter-spacing: -0.02em;
         }
         .shared-card-number {
-          font-size: 14px;
+          font-size: var(--text-sm);
           opacity: 0.9;
-          margin-top: 4px;
-          font-family: 'SF Mono', 'Menlo', monospace;
+          margin-top: var(--space-1);
+          font-family: var(--font-mono);
+          letter-spacing: 0.06em;
+        }
+        .shared-card-notes {
+          margin-top: var(--space-4);
+          padding: var(--space-4);
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius);
+          font-size: var(--text-sm);
         }
       `}</style>
     </div>

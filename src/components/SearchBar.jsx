@@ -15,22 +15,32 @@ export function SearchBar({ value, onInput }) {
       <style>{`
         .search-bar {
           position: relative;
-          margin-bottom: 16px;
+          margin-bottom: var(--space-4);
         }
         .search-icon {
           position: absolute;
-          left: 12px;
+          left: 14px;
           top: 50%;
           transform: translateY(-50%);
           color: var(--color-text-secondary);
           pointer-events: none;
         }
         .search-input {
-          padding-left: 40px;
-          border-radius: 24px;
+          padding-left: 42px;
+          border-radius: 999px;
           background: var(--color-surface);
           border: 1px solid var(--color-border);
-          height: 44px;
+          height: 46px;
+          box-shadow: var(--shadow-sm);
+        }
+        .search-input::-webkit-search-cancel-button {
+          -webkit-appearance: none;
+          height: 16px;
+          width: 16px;
+          background: var(--color-text-secondary);
+          border-radius: 50%;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='white' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E") center/contain no-repeat;
+          cursor: pointer;
         }
       `}</style>
     </div>
