@@ -318,6 +318,40 @@ export async function disableEncryption() {
  * the stored verifier. Returns true and keeps the key in memory on success,
  * false (key discarded) if the password is wrong.
  */
+/**
+ * Seals any record still sitting in the clear while encryption is on — the
+ * residue of an enableEncryption that was interrupted partway through, which
+ * would otherwise stay unencrypted at rest forever while the vault claims to
+ * be protected.
+ *
+ * MUST only be called once the password has actually been verified. Running it
+ * after an unverified unlock would seal plaintext cards under an arbitrary
+ * password and make them unrecoverable.
+ *
+ * Silent and non-fatal: the user has nothing to decide here, and a failure
+ * just means the next unlock tries again.
+ */
+async function sealPlaintextResidue() {
+  if (!encryptionKey) return;
+  try {
+    const db = await getDB();
+    const raw = await db.getAll(STORE_NAME);
+    const pending = raw.filter(c => !c._enc);
+    if (!pending.length) return;
+
+    // Encrypt outside the transaction: crypto.subtle spans ticks and would let
+    // an open IndexedDB transaction auto-commit underneath us.
+    const sealed = await Promise.all(pending.map(encryptCard));
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    for (const card of sealed) {
+      await tx.store.put(card);
+    }
+    await tx.done;
+  } catch {
+    // Leave it for next time rather than blocking the unlock.
+  }
+}
+
 export async function unlock(password) {
   const salt = getStoredSalt();
   if (!salt) return false;
@@ -332,6 +366,7 @@ export async function unlock(password) {
       return false;
     }
     setEncryptionKey(key);
+    await sealPlaintextResidue();
     return true;
   }
 
@@ -344,7 +379,9 @@ export async function unlock(password) {
     // Empty legacy vault — nothing to validate against. Accept so the user
     // isn't locked out of their own (empty) vault, but deliberately do NOT
     // write a verifier: doing so would pin whatever password was typed and
-    // permanently reject the real one.
+    // permanently reject the real one. No residue sealing here either: the
+    // password was never verified, and sealing plaintext under it would
+    // destroy those cards.
     setEncryptionKey(key);
     return true;
   }
@@ -357,5 +394,6 @@ export async function unlock(password) {
 
   setEncryptionKey(key);
   localStorage.setItem(ENC_VERIFIER_KEY, await encryptJSON(VERIFIER_PLAINTEXT, key));
+  await sealPlaintextResidue();
   return true;
 }
