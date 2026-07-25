@@ -413,3 +413,16 @@ body.has-install-banner {
 .card-fav:active {
   transform: translateY(-50%) scale(0.85);
 }
+
+/* A card whose blob could not be decrypted: muted and flat, so it never reads
+   as a usable card, but still visible so the record isn't silently lost. */
+.card-item-unreadable {
+  background: var(--color-surface) !important;
+  border: 1px dashed var(--color-border);
+  box-shadow: none;
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+.card-item-unreadable .card-provider {
+  font-size: var(--text-base);
+}

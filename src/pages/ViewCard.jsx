@@ -14,10 +14,12 @@ export function ViewCard({ id, showToast }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    getCard(id).then(c => {
-      setCard(c);
-      setLoading(false);
-    });
+    // Without the catch a rejected read would leave the page stuck on
+    // "Caricamento..." forever instead of reporting the problem.
+    getCard(id)
+      .then(setCard)
+      .catch(() => setCard(null))
+      .finally(() => setLoading(false));
   }, [id]);
 
   // Keeps the screen awake while the barcode is on display at a till.
@@ -90,6 +92,23 @@ export function ViewCard({ id, showToast }) {
           }
         >
           La carta che stai cercando non esiste più.
+        </PageMessage>
+      </div>
+    );
+  }
+
+  if (card._unreadable) {
+    return (
+      <div class="page">
+        <PageMessage
+          title="Carta non leggibile"
+          action={
+            <button class="btn btn-primary" onClick={() => route('/fidelity-card-app/')}>
+              Vai alle mie carte
+            </button>
+          }
+        >
+          I dati di questa carta non possono essere decifrati. Le altre carte non sono interessate.
         </PageMessage>
       </div>
     );

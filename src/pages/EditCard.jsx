@@ -10,10 +10,12 @@ export function EditCard({ id, showToast }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getCard(id).then(c => {
-      setCard(c);
-      setLoading(false);
-    });
+    // Without the catch a rejected read would leave the page stuck on
+    // "Caricamento..." forever instead of reporting the problem.
+    getCard(id)
+      .then(setCard)
+      .catch(() => setCard(null))
+      .finally(() => setLoading(false));
   }, [id]);
 
   const handleSubmit = async (data) => {
@@ -42,6 +44,16 @@ export function EditCard({ id, showToast }) {
           }
         >
           La carta che stai cercando non esiste più.
+        </PageMessage>
+      </div>
+    );
+  }
+
+  if (card._unreadable) {
+    return (
+      <div class="page">
+        <PageMessage title="Carta non leggibile">
+          I dati di questa carta non possono essere decifrati, quindi non è possibile modificarla.
         </PageMessage>
       </div>
     );

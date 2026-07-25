@@ -1,9 +1,38 @@
 import { route } from 'preact-router';
 import { getContrastColor, cardGradient, DEFAULT_CARD_COLOR } from '../utils/color';
 
-export function CardItem({ card, onToggleFavorite }) {
+export function CardItem({ card, onToggleFavorite, onDelete }) {
   const color = card.color || DEFAULT_CARD_COLOR;
   const textColor = getContrastColor(color);
+
+  // A record whose blob failed to decrypt. Shown rather than hidden, so the
+  // user knows something is there — but with no navigation (there is nothing
+  // to display) and no star (writing to it would seal a placeholder over the
+  // original ciphertext). Deleting works: it needs no key.
+  if (card._unreadable) {
+    return (
+      <div class="card-item-wrap">
+        <div class="card-item card-item-unreadable">
+          <div class="card-item-content">
+            <span class="card-provider">Carta non leggibile</span>
+            <span class="card-number">I dati non possono essere decifrati</span>
+          </div>
+        </div>
+        {onDelete && (
+          <button
+            class="card-fav"
+            onClick={() => onDelete(card.id)}
+            aria-label="Rimuovi la carta non leggibile"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+        )}
+      </div>
+    );
+  }
 
   // The star is a sibling of the card button, not nested inside it: a button
   // within a button is invalid markup and swallows the inner click.

@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { route } from 'preact-router';
 import { downloadExport, pickImportFile, decryptImport, commitImport } from '../utils/export-import';
-import { getAllCards, isEncryptionEnabled, enableEncryption, disableEncryption } from '../db';
+import { isEncryptionEnabled, enableEncryption, disableEncryption } from '../db';
 import { PageHeader } from '../components/PageHeader';
 import { PasswordPrompt } from '../components/PasswordPrompt';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -18,8 +18,11 @@ export function Settings({ showToast }) {
   const runExport = async (password) => {
     setExporting(true);
     try {
-      const count = await downloadExport(password);
-      showToast(`${count} carte esportate`);
+      const { count, skipped } = await downloadExport(password);
+      showToast(skipped
+        ? `${count} carte esportate — ${skipped} non leggibili escluse`
+        : `${count} carte esportate`,
+        skipped ? 'error' : 'success');
     } catch {
       showToast('Errore nell\'esportazione', 'error');
     } finally {
@@ -149,7 +152,7 @@ export function Settings({ showToast }) {
           onClose={() => setShowSetup(false)}
           onSubmit={async (password) => {
             try {
-              await enableEncryption(password, await getAllCards());
+              await enableEncryption(password);
             } catch (err) {
               // Surface the real reason: hiding it behind a generic string
               // left the user with no idea what state the vault was in.

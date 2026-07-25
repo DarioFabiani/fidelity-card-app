@@ -10,7 +10,7 @@ import { InstallPrompt } from '../components/InstallPrompt';
 import { PageMessage } from '../components/PageMessage';
 
 export function Home() {
-  const { cards, loading, toggleFav } = useCards();
+  const { cards, loading, error, toggleFav, remove } = useCards();
   const { query, setQuery, filtered } = useSearch(cards);
   const { mode, setMode, sections } = useSortedCards(filtered);
 
@@ -30,6 +30,8 @@ export function Home() {
 
       {loading ? (
         <PageMessage>Caricamento...</PageMessage>
+      ) : error ? (
+        <PageMessage title="Impossibile leggere le carte">{error}</PageMessage>
       ) : cards.length === 0 ? (
         <EmptyState onAdd={() => route('/fidelity-card-app/add')} />
       ) : filtered.length === 0 ? (
@@ -37,7 +39,7 @@ export function Home() {
           Nessuna carta corrisponde a "{query}".
         </PageMessage>
       ) : (
-        <CardList sections={sections} onToggleFavorite={toggleFav} />
+        <CardList sections={sections} onToggleFavorite={toggleFav} onDelete={remove} />
       )}
 
       <button

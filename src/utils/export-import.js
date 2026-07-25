@@ -31,7 +31,7 @@ function saveFile(text) {
  * device. Without one the legacy plain array is written.
  */
 export async function downloadExport(password) {
-  const cards = await exportCards();
+  const { cards, skipped } = await exportCards();
 
   if (password) {
     const salt = generateSalt();
@@ -48,7 +48,7 @@ export async function downloadExport(password) {
     saveFile(JSON.stringify(cards, null, 2));
   }
 
-  return cards.length;
+  return { count: cards.length, skipped };
 }
 
 /**

@@ -5,11 +5,16 @@ export function useCards() {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState('');
+
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
-      const data = await getAllCards();
-      setCards(data);
+      setCards(await getAllCards());
+    } catch (err) {
+      // Without this the list would stay empty with no explanation.
+      setError(err?.message || 'Impossibile leggere le carte');
     } finally {
       setLoading(false);
     }
@@ -40,5 +45,5 @@ export function useCards() {
     return updated;
   }, []);
 
-  return { cards, loading, reload: load, add, update, remove, toggleFav };
+  return { cards, loading, error, reload: load, add, update, remove, toggleFav };
 }

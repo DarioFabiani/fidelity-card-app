@@ -104,17 +104,40 @@ export async function repairEncryptionState() {
   return true;
 }
 
+/**
+ * Stand-in for a record that cannot be decrypted (corrupted blob, or sealed
+ * under a key we no longer hold). Carries only the fields that were in the
+ * clear anyway — never a fake providerName/cardNumber, and never `_enc`, so
+ * it can't be mistaken for real data or re-sealed on top of the original.
+ */
+function unreadableCard(raw) {
+  return {
+    id: raw.id,
+    color: raw.color,
+    favorite: false,
+    createdAt: raw.createdAt,
+    updatedAt: raw.updatedAt,
+    _unreadable: true
+  };
+}
+
 export async function getAllCards() {
   const db = await getDB();
   const cards = await db.getAll(STORE_NAME);
   const sorted = cards.sort((a, b) => b.createdAt - a.createdAt);
 
-  // Locked, or sealed records with the flag somehow off: never hand ciphertext
-  // to the UI — it would render as a card with undefined fields.
+  // Locked (encryption on, key not in memory): never hand ciphertext to the
+  // UI — it would render as a card with undefined fields.
   if (!hasEncryptionKey()) {
     return sorted.some(c => c._enc) ? [] : sorted;
   }
-  return Promise.all(sorted.map(decryptCard));
+
+  // allSettled, not all: one corrupted blob must not take the whole list down
+  // with it and make the app claim the vault is empty.
+  const results = await Promise.allSettled(sorted.map(decryptCard));
+  return results.map((r, i) =>
+    r.status === 'fulfilled' ? r.value : unreadableCard(sorted[i])
+  );
 }
 
 export async function getCard(id) {
@@ -124,7 +147,11 @@ export async function getCard(id) {
   if (!hasEncryptionKey()) {
     return card._enc ? null : card;
   }
-  return decryptCard(card);
+  try {
+    return await decryptCard(card);
+  } catch {
+    return unreadableCard(card);
+  }
 }
 
 export async function addCard(card) {
@@ -150,6 +177,7 @@ export async function addCard(card) {
 }
 
 export async function updateCard(card) {
+  if (card._unreadable) throw new Error('Carta non leggibile: modifica rifiutata');
   const db = await getDB();
   const existingRaw = await db.get(STORE_NAME, card.id);
   if (!existingRaw) throw new Error('Carta non trovata');
@@ -171,6 +199,9 @@ export async function updateCard(card) {
 export async function toggleFavorite(id) {
   const card = await getCard(id);
   if (!card) throw new Error('Carta non trovata');
+  // Writing to a record we cannot read would seal a placeholder over the
+  // original ciphertext.
+  if (card._unreadable) throw new Error('Carta non leggibile');
   return updateCard({ id, favorite: !card.favorite });
 }
 
@@ -194,8 +225,16 @@ export async function importCards(cards) {
   await tx.done;
 }
 
+/**
+ * Cards for a backup file, plus how many were left out. Unreadable records are
+ * excluded on purpose: writing a placeholder into a backup would produce a
+ * file that re-imports as a broken card, and the caller should tell the user
+ * the export is not complete.
+ */
 export async function exportCards() {
-  return getAllCards();
+  const all = await getAllCards();
+  const cards = all.filter(c => !c._unreadable);
+  return { cards, skipped: all.length - cards.length };
 }
 
 /**
@@ -204,7 +243,7 @@ export async function exportCards() {
  * localStorage (the salt is not secret), keeps the key only in memory, and
  * re-saves every existing card encrypted.
  */
-export async function enableEncryption(password, existingCards) {
+export async function enableEncryption(password) {
   const db = await getDB();
   const salt = generateSalt();
   const key = await deriveKey(password, salt);
@@ -223,8 +262,12 @@ export async function enableEncryption(password, existingCards) {
   localStorage.setItem(ENC_ENABLED_KEY, 'true');
 
   try {
+    // Read the raw rows here rather than taking them from the caller: what the
+    // UI holds are decrypted views (or placeholders for unreadable records),
+    // and sealing one of those would overwrite real ciphertext with a fake.
+    const raw = await db.getAll(STORE_NAME);
     const encryptedCards = await Promise.all(
-      existingCards.filter(c => !c._enc).map(encryptCard)
+      raw.filter(c => !c._enc).map(encryptCard)
     );
 
     const tx = db.transaction(STORE_NAME, 'readwrite');

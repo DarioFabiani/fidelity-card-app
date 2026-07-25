@@ -4,7 +4,7 @@ import { CardItem } from './CardItem';
  * Renders the sections produced by the sort hook. A section with a null label
  * carries no heading (the flat "most recent" run when nothing is starred).
  */
-export function CardList({ sections, onToggleFavorite }) {
+export function CardList({ sections, onToggleFavorite, onDelete }) {
   return (
     <div class="card-list">
       {sections.map(section => (
@@ -21,7 +21,7 @@ export function CardList({ sections, onToggleFavorite }) {
           )}
           <div class="card-section-items">
             {section.cards.map(card => (
-              <CardItem key={card.id} card={card} onToggleFavorite={onToggleFavorite} />
+              <CardItem key={card.id} card={card} onToggleFavorite={onToggleFavorite} onDelete={onDelete} />
             ))}
           </div>
         </div>
