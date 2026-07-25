@@ -13,6 +13,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   const [submitting, setSubmitting] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [ScannerComponent, setScannerComponent] = useState(null);
+  const [scannerError, setScannerError] = useState('');
   const formRef = useRef(null);
 
   const handleScanned = (text, format) => {
@@ -22,9 +23,18 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   };
 
   const openScanner = async () => {
+    setScannerError('');
     if (!ScannerComponent) {
-      const { BarcodeScanner } = await import('./BarcodeScanner');
-      setScannerComponent(() => BarcodeScanner);
+      try {
+        // The scanner chunk is fetched on demand and is not precached, so
+        // offline this can fail. Silently doing nothing made the button look
+        // broken; the error state is local so the form owns its own message.
+        const { BarcodeScanner } = await import('./BarcodeScanner');
+        setScannerComponent(() => BarcodeScanner);
+      } catch {
+        setScannerError('Scanner non disponibile offline: inserisci il numero a mano.');
+        return;
+      }
     }
     setScannerOpen(true);
   };
@@ -125,6 +135,8 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
         </div>
       </div>
 
+      {scannerError && <p class="scan-error">{scannerError}</p>}
+
       {scannerOpen && ScannerComponent && (
         <ScannerComponent
           onDetected={handleScanned}
@@ -221,6 +233,10 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
         }
         .scan-btn:active {
           background: var(--color-bg);
+        }
+        .scan-error {
+          font-size: var(--text-sm);
+          color: var(--color-danger);
         }
         .suggestions {
           position: absolute;
