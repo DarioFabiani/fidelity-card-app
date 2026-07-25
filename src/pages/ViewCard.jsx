@@ -24,26 +24,38 @@ export function ViewCard({ id, showToast }) {
 
   // Keeps the screen awake while the barcode is on display at a till.
   useEffect(() => {
-    let wakeLock = null;
+    // A Set, not a single ref: the browser can release a lock on its own, and
+    // two visibility changes can overlap. Anything still held gets released on
+    // the way out, so none can be orphaned.
+    const locks = new Set();
+    let inFlight = false;
     let cancelled = false;
 
+    const drop = (lock) => {
+      locks.delete(lock);
+      lock.release().catch(() => {});
+    };
+
     async function requestWakeLock() {
-      if (!('wakeLock' in navigator) || cancelled) return;
-      // Drop any lock still held before asking for another, otherwise every
-      // return to the foreground would leak one.
-      if (wakeLock) {
-        try { await wakeLock.release(); } catch {}
-        wakeLock = null;
-      }
+      // Without this guard a second visibilitychange arriving while the first
+      // request is still pending would acquire a second lock and orphan one.
+      if (!('wakeLock' in navigator) || cancelled || inFlight) return;
+      inFlight = true;
       try {
+        for (const lock of locks) drop(lock);
         const lock = await navigator.wakeLock.request('screen');
-        // The request can resolve after the user has already left the page.
         if (cancelled) {
           lock.release().catch(() => {});
         } else {
-          wakeLock = lock;
+          locks.add(lock);
+          // The browser drops the lock by itself when the page is hidden.
+          lock.addEventListener?.('release', () => locks.delete(lock));
         }
-      } catch {}
+      } catch {
+        // No lock this time; the next foreground visit tries again.
+      } finally {
+        inFlight = false;
+      }
     }
 
     requestWakeLock();
@@ -54,7 +66,8 @@ export function ViewCard({ id, showToast }) {
 
     return () => {
       cancelled = true;
-      if (wakeLock) wakeLock.release().catch(() => {});
+      for (const lock of locks) lock.release().catch(() => {});
+      locks.clear();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
