@@ -6,6 +6,13 @@ import { PageHeader } from '../components/PageHeader';
 import { PasswordPrompt } from '../components/PasswordPrompt';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 
+function importSummary({ added, updated }) {
+  const parts = [];
+  if (added) parts.push(`${added} ${added === 1 ? 'carta importata' : 'carte importate'}`);
+  if (updated) parts.push(`${updated} ${updated === 1 ? 'aggiornata' : 'aggiornate'}`);
+  return parts.length ? parts.join(', ') : 'Nessuna carta importata';
+}
+
 export function Settings({ showToast }) {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -49,8 +56,7 @@ export function Settings({ showToast }) {
         setPendingImport(picked);
         return;
       }
-      const count = await commitImport(picked.cards);
-      showToast(`${count} carte importate`);
+      showToast(importSummary(await commitImport(picked.cards)));
     } catch (err) {
       showToast(err.message || 'Errore nell\'importazione', 'error');
     } finally {
@@ -189,9 +195,9 @@ export function Settings({ showToast }) {
           onSubmit={async (password) => {
             const cards = await decryptImport(pendingImport, password);
             if (!cards) return 'Password errata o file di backup corrotto';
-            const count = await commitImport(cards);
+            const summary = importSummary(await commitImport(cards));
             setPendingImport(null);
-            showToast(`${count} carte importate`);
+            showToast(summary);
           }}
         />
       )}

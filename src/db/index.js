@@ -235,6 +235,12 @@ export async function deleteCard(id) {
   await db.delete(STORE_NAME, id);
 }
 
+/** Ids already stored, so an import can report what it is about to replace. */
+export async function listCardIds() {
+  const db = await getDB();
+  return db.getAllKeys(STORE_NAME);
+}
+
 export async function importCards(cards) {
   // Last line of defence: a record carrying `_enc` from outside would look
   // like ciphertext this device has no key for, and lock the whole vault.

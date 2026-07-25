@@ -1,4 +1,4 @@
-import { exportCards, importCards } from '../db';
+import { exportCards, importCards, listCardIds } from '../db';
 import { DEFAULT_CARD_COLOR } from './color';
 import { deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer } from './crypto';
 
@@ -139,7 +139,14 @@ export async function decryptImport(payload, password) {
   }
 }
 
+/**
+ * Writes the imported cards, reporting how many replaced an existing card.
+ * Import matches on id, so a backup silently overwrote anything edited since
+ * it was taken — the counts at least make that visible.
+ */
 export async function commitImport(cards) {
+  const existing = new Set((await listCardIds()));
+  const updated = cards.filter(c => existing.has(c.id)).length;
   await importCards(cards);
-  return cards.length;
+  return { added: cards.length - updated, updated };
 }
