@@ -1,6 +1,32 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { copyFileSync, existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * GitHub Pages has no SPA fallback: a deep link like /shared?data=... is
+ * requested from the server before the app exists in the browser, and answers
+ * 404. That is exactly the path a shared card arrives on, for a recipient who
+ * has never opened the app — so the service worker cannot help either.
+ * Serving the same document as 404.html makes Pages hand back the app, which
+ * then routes client-side.
+ */
+function spaFallback() {
+  return {
+    name: 'spa-fallback-404',
+    closeBundle() {
+      const dist = resolve(__dirname, 'dist');
+      const index = resolve(dist, 'index.html');
+      if (existsSync(index)) {
+        copyFileSync(index, resolve(dist, '404.html'));
+      }
+    }
+  };
+}
 
 export default defineConfig({
   base: '/fidelity-card-app/',
@@ -18,6 +44,7 @@ export default defineConfig({
     }
   },
   plugins: [
+    spaFallback(),
     preact(),
     VitePWA({
       registerType: 'autoUpdate',
@@ -53,12 +80,16 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // The ZXing scanner chunk (~415 kB) and the jsbarcode/qrcode chunks
-        // (~92 kB combined) are only needed when a barcode is actually
-        // scanned, viewed, or shared. Precaching them made every user
-        // download them on first load and again after each update,
-        // cancelling out the lazy imports.
-        globIgnores: ['**/BarcodeScanner-*.js', '**/barcode-*.js', '**/qrcode-*.js'],
+        // Only the ZXing scanner (~415 kB) stays out of the precache: it is
+        // optional (a number can always be typed in) and CardForm already
+        // reports it when the chunk cannot be fetched.
+        //
+        // The barcode/qrcode chunks must NOT be excluded, even though they are
+        // lazily imported. Showing the code at a till, offline, is the whole
+        // point of the app: leaving them to runtime caching meant a card first
+        // opened offline had no barcode at all. They still stay out of the
+        // entry chunk, so the win on first paint is kept.
+        globIgnores: ['**/BarcodeScanner-*.js'],
         runtimeCaching: [
           {
             urlPattern: /\/assets\/BarcodeScanner-.*\.js$/,
@@ -66,14 +97,6 @@ export default defineConfig({
             options: {
               cacheName: 'barcode-scanner',
               expiration: { maxEntries: 2 }
-            }
-          },
-          {
-            urlPattern: /\/assets\/(barcode|qrcode)-.*\.js$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'barcode-render',
-              expiration: { maxEntries: 4 }
             }
           }
         ]

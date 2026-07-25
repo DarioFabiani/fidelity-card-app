@@ -26,6 +26,10 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
         const ok = renderBarcode(svgRef.current, value, format);
         if (!cancelled) setError(!ok);
       }
+    }).catch(() => {
+      // The chunk is precached, so this should not happen — but an unhandled
+      // rejection here would leave a blank white box with no explanation.
+      if (!cancelled) setError(true);
     });
 
     return () => {
