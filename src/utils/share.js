@@ -45,6 +45,31 @@ export function normalizeShareCode(input) {
 }
 
 /**
+ * Cache of the {url, code} pairs handed out during this session.
+ *
+ * The pair has to stay stable: the link carries the ciphertext and there is no
+ * server, so nothing can be revoked — a link already sent stays openable
+ * forever with the code it was created with. Handing out a fresh code on
+ * reopen would show the sender a code that does not belong to the link they
+ * already sent, and the recipient would have no way to tell.
+ *
+ * Keyed by id + updatedAt so editing a card naturally retires its stale link.
+ * Memory only, never persisted: the code is the secret guarding a public
+ * ciphertext, and writing it to disk would outlive the vault lock.
+ */
+const shareLinks = new Map();
+
+export async function getShareLink(card) {
+  const key = `${card.id}:${card.updatedAt ?? ''}`;
+  const cached = shareLinks.get(key);
+  if (cached) return cached;
+
+  const fresh = await encodeCardForShare(card);
+  shareLinks.set(key, fresh);
+  return fresh;
+}
+
+/**
  * Builds a shareable link for a card. The card payload is encrypted with
  * AES-256-GCM under a key derived (PBKDF2) from a freshly generated random
  * code, so anyone who only intercepts the link cannot read the card data —
@@ -129,7 +154,11 @@ export async function shareCard(card, shareData) {
       });
       return { success: true, method: 'share', code };
     } catch (err) {
+      // Aborting is a deliberate user action, so it stays silent. Anything
+      // else (NotAllowedError, ...) is a real failure the caller must report,
+      // otherwise the button looks dead.
       if (err.name === 'AbortError') return { success: false, method: 'cancelled' };
+      return { success: false, method: 'error', url, code };
     }
   }
 
