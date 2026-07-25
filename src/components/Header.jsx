@@ -26,10 +26,32 @@ export function Header() {
           right: 0;
           height: calc(var(--header-height) + env(safe-area-inset-top));
           padding-top: env(safe-area-inset-top);
-          background: linear-gradient(135deg, var(--color-header-from), var(--color-header-to));
+          /* Tinted glass rather than clear: keeps the brand colour and
+             guarantees contrast for the white text whatever scrolls under it. */
+          background: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--color-header-from) 78%, transparent),
+            color-mix(in srgb, var(--color-header-to) 82%, transparent)
+          );
+          -webkit-backdrop-filter: blur(22px) saturate(180%);
+          backdrop-filter: blur(22px) saturate(180%);
           color: #FFFFFF;
           z-index: 150;
-          box-shadow: var(--shadow-md);
+          box-shadow:
+            inset 0 -1px 0 color-mix(in srgb, #FFFFFF 18%, transparent),
+            var(--shadow-md);
+        }
+        @media (prefers-reduced-transparency: reduce) {
+          .header {
+            background: linear-gradient(135deg, var(--color-header-from), var(--color-header-to));
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+          }
+        }
+        @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+          .header {
+            background: linear-gradient(135deg, var(--color-header-from), var(--color-header-to));
+          }
         }
         .header-inner {
           max-width: 600px;

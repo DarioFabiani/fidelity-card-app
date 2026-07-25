@@ -71,8 +71,10 @@ export function InstallPrompt() {
           bottom: 0;
           left: 0;
           right: 0;
-          background: var(--color-surface);
-          border-top: 1px solid var(--color-border);
+          background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+          -webkit-backdrop-filter: blur(22px) saturate(180%);
+          backdrop-filter: blur(22px) saturate(180%);
+          border-top: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
           padding: var(--space-3) var(--space-4);
           padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
           display: flex;
@@ -80,8 +82,17 @@ export function InstallPrompt() {
           justify-content: space-between;
           gap: var(--space-3);
           z-index: 100;
-          box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+          box-shadow:
+            inset 0 1px 0 color-mix(in srgb, #FFFFFF 45%, transparent),
+            0 -2px 12px rgba(0,0,0,0.1);
           animation: slideUp 0.3s ease;
+        }
+        @media (prefers-reduced-transparency: reduce) {
+          .install-banner {
+            background: var(--color-surface);
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+          }
         }
         .install-text {
           font-size: var(--text-sm);
