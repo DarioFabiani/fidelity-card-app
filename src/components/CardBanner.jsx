@@ -41,6 +41,9 @@ export function CardBanner({ color, name, number, action }) {
           font-size: var(--text-xl);
           font-weight: 700;
           letter-spacing: -0.02em;
+          /* Keeps a long name from wrapping underneath the absolutely
+             positioned star in the top-right corner. */
+          padding: 0 40px;
         }
         .card-banner-number {
           font-size: var(--text-sm);

@@ -27,9 +27,10 @@ export function Settings({ showToast }) {
     setExporting(true);
     try {
       const { count, skipped } = await downloadExport(password);
+      const exported = `${count} ${count === 1 ? 'carta esportata' : 'carte esportate'}`;
       showToast(skipped
-        ? `${count} carte esportate — ${skipped} non leggibili escluse`
-        : `${count} carte esportate`,
+        ? `${exported} — ${skipped} non ${skipped === 1 ? 'leggibile esclusa' : 'leggibili escluse'}`
+        : exported,
         skipped ? 'error' : 'success');
     } catch {
       showToast('Errore nell\'esportazione', 'error');

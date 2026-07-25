@@ -1,4 +1,5 @@
 import { route } from 'preact-router';
+import { useState } from 'preact/hooks';
 import { useCards } from '../hooks/useCards';
 import { useSearch } from '../hooks/useSearch';
 import { useSortedCards } from '../hooks/useSortedCards';
@@ -8,9 +9,11 @@ import { CardList } from '../components/CardList';
 import { EmptyState } from '../components/EmptyState';
 import { InstallPrompt } from '../components/InstallPrompt';
 import { PageMessage } from '../components/PageMessage';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PlusIcon } from '../components/icons';
 
 export function Home() {
+  const [confirmRemoveId, setConfirmRemoveId] = useState(null);
   const { cards, loading, error, toggleFav, remove } = useCards();
   const { query, setQuery, filtered } = useSearch(cards);
   const { mode, setMode, sections } = useSortedCards(filtered);
@@ -40,7 +43,7 @@ export function Home() {
           Nessuna carta corrisponde a "{query}".
         </PageMessage>
       ) : (
-        <CardList sections={sections} onToggleFavorite={toggleFav} onDelete={remove} />
+        <CardList sections={sections} onToggleFavorite={toggleFav} onDelete={setConfirmRemoveId} />
       )}
 
       <button
@@ -50,6 +53,17 @@ export function Home() {
       >
         <PlusIcon size={26} />
       </button>
+
+      {confirmRemoveId && (
+        <ConfirmDialog
+          title="Rimuovere la carta non leggibile?"
+          message="Il record verrà eliminato definitivamente. I suoi dati non sono comunque recuperabili senza la password con cui erano stati cifrati."
+          confirmLabel="Rimuovi"
+          danger
+          onConfirm={() => { remove(confirmRemoveId); setConfirmRemoveId(null); }}
+          onCancel={() => setConfirmRemoveId(null)}
+        />
+      )}
 
       <InstallPrompt />
 

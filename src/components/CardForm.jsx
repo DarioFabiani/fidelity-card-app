@@ -7,6 +7,9 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   const [providerName, setProviderName] = useState(initial?.providerName || '');
   const [cardNumber, setCardNumber] = useState(initial?.cardNumber || '');
   const [barcodeFormat, setBarcodeFormat] = useState(initial?.barcodeFormat || 'CODE128');
+  // Once the format has been chosen explicitly, stop guessing it from the
+  // number: re-guessing on every keystroke silently reverted the choice.
+  const [formatPickedByUser, setFormatPickedByUser] = useState(false);
   const [color, setColor] = useState(initial?.color || DEFAULT_CARD_COLOR);
   const [notes, setNotes] = useState(initial?.notes || '');
   const [suggestions, setSuggestions] = useState([]);
@@ -58,9 +61,8 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
 
   const handleCardNumberInput = (value) => {
     setCardNumber(value);
-    if (!initial) {
-      const suggested = suggestFormat(value);
-      setBarcodeFormat(suggested);
+    if (!initial && !formatPickedByUser) {
+      setBarcodeFormat(suggestFormat(value));
     }
   };
 
@@ -145,7 +147,10 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
 
       <div class="form-group">
         <label class="label-caps form-label">Formato codice a barre</label>
-        <select value={barcodeFormat} onChange={e => setBarcodeFormat(e.target.value)}>
+        <select
+          value={barcodeFormat}
+          onChange={e => { setBarcodeFormat(e.target.value); setFormatPickedByUser(true); }}
+        >
           {BARCODE_FORMATS.map(f => (
             <option key={f.value} value={f.value}>
               {f.label} — {f.description}

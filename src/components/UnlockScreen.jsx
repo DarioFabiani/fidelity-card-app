@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { unlock } from '../db';
 import { LockIcon } from './icons';
 
-export function UnlockScreen({ onUnlock }) {
+export function UnlockScreen({ onUnlock, onRecover }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -48,6 +48,12 @@ export function UnlockScreen({ onUnlock }) {
           <button type="submit" class="btn btn-primary btn-block" disabled={loading || !password}>
             {loading ? 'Sblocco in corso...' : 'Sblocca'}
           </button>
+
+          {onRecover && (
+            <button type="button" class="unlock-recover" onClick={onRecover}>
+              Ho dimenticato la password
+            </button>
+          )}
         </form>
       </div>
 
@@ -94,6 +100,15 @@ export function UnlockScreen({ onUnlock }) {
           display: flex;
           flex-direction: column;
           gap: 12px;
+        }
+        .unlock-recover {
+          align-self: center;
+          margin-top: var(--space-4);
+          padding: var(--space-2);
+          font-size: var(--text-sm);
+          color: var(--color-text-secondary);
+          text-decoration: underline;
+          -webkit-tap-highlight-color: transparent;
         }
         .unlock-error {
           font-size: 13px;

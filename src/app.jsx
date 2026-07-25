@@ -21,6 +21,9 @@ export function App() {
   // ciphertext ever reached the UI, but long enough for an export started in
   // that window to silently produce an empty backup.
   const [checked, setChecked] = useState(false);
+  // Reached from the unlock screen: a forgotten password otherwise left the
+  // app with no way forward at all.
+  const [showRecovery, setShowRecovery] = useState(false);
 
   // An interrupted setup can leave sealed cards with the flag off. Detect that
   // before rendering anything, so we ask to unlock instead of showing rows of
@@ -44,8 +47,12 @@ export function App() {
     setToast(null);
   }, []);
 
-  if (vaultError) {
-    return <VaultRecovery message={vaultError} />;
+  if (vaultError || showRecovery) {
+    return (
+      <VaultRecovery
+        message={vaultError || 'Senza la password i dati cifrati non possono essere letti. Puoi salvarne una copia così come sono, oppure ripartire da zero.'}
+      />
+    );
   }
 
   if (!checked) {
@@ -53,7 +60,7 @@ export function App() {
   }
 
   if (!unlocked) {
-    return <UnlockScreen onUnlock={() => setUnlocked(true)} />;
+    return <UnlockScreen onUnlock={() => setUnlocked(true)} onRecover={() => setShowRecovery(true)} />;
   }
 
   return (
