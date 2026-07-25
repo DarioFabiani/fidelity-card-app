@@ -1,8 +1,8 @@
 import { route } from 'preact-router';
-import { getContrastColor, cardGradient } from '../utils/color';
+import { getContrastColor, cardGradient, DEFAULT_CARD_COLOR } from '../utils/color';
 
 export function CardItem({ card }) {
-  const color = card.color || '#1565C0';
+  const color = card.color || DEFAULT_CARD_COLOR;
   const textColor = getContrastColor(color);
 
   return (

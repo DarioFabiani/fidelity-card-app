@@ -1,17 +1,22 @@
 :root {
-  --color-primary: #1565C0;
-  --color-primary-dark: #0D47A1;
-  --color-primary-light: #42A5F5;
-  --color-accent: #FF6F00;
-  --color-bg: #F5F5F5;
+  /* Muted, low-saturation palette: colour carries meaning without shouting. */
+  --color-primary: #3D6A99;
+  --color-primary-dark: #2C4F75;
+  /* Text/icon colour that sits on top of --color-primary. Flips in dark mode,
+     where the primary is light and white would only reach ~2.6:1. */
+  --color-on-primary: #FFFFFF;
+  --color-primary-light: #7BA3C7;
+  --color-accent: #B57A45;
+  --color-bg: #F4F4F2;
   --color-surface: #FFFFFF;
-  --color-text: #212121;
-  --color-text-secondary: #757575;
-  --color-border: #E0E0E0;
-  --color-danger: #D32F2F;
-  --color-success: #388E3C;
-  --color-header-from: #1565C0;
-  --color-header-to: #0D47A1;
+  --color-text: #23262B;
+  --color-text-secondary: #646973;
+  --color-border: #E2E2DF;
+  --color-danger: #A34F47;
+  --color-on-danger: #FFFFFF;
+  --color-success: #4C7757;
+  --color-header-from: #446F9B;
+  --color-header-to: #2C4F75;
   --shadow-sm: 0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.10);
   --shadow-md: 0 4px 8px -2px rgba(16,24,40,0.10), 0 2px 4px -2px rgba(16,24,40,0.06);
   --shadow-lg: 0 12px 20px -4px rgba(16,24,40,0.12), 0 4px 8px -4px rgba(16,24,40,0.08);
@@ -39,17 +44,22 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-primary: #42A5F5;
-    --color-primary-dark: #1565C0;
-    --color-primary-light: #90CAF9;
-    --color-bg: #121212;
-    --color-surface: #1E1E1E;
-    --color-text: #E0E0E0;
-    --color-text-secondary: #9E9E9E;
-    --color-border: #333333;
+    --color-primary: #7BA3C7;
+    --color-primary-dark: #3D6A99;
+    --color-on-primary: #15161A;
+    --color-primary-light: #A6C3DC;
+    --color-accent: #C79A6B;
+    --color-bg: #15161A;
+    --color-surface: #1E2026;
+    --color-text: #E3E4E6;
+    --color-text-secondary: #989CA5;
+    --color-border: #32353D;
+    --color-danger: #C4736B;
+    --color-on-danger: #15161A;
+    --color-success: #74A382;
     /* Keeps white header text legible: the light-mode blues are too bright on dark. */
-    --color-header-from: #10315A;
-    --color-header-to: #0A2342;
+    --color-header-from: #26384D;
+    --color-header-to: #1A2635;
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.35);
     --shadow-md: 0 4px 10px rgba(0,0,0,0.45);
     --shadow-lg: 0 12px 24px rgba(0,0,0,0.55);
@@ -153,7 +163,7 @@ input:focus, textarea:focus, select:focus {
 
 .btn-primary {
   background: var(--color-primary);
-  color: #FFFFFF;
+  color: var(--color-on-primary);
 }
 
 .btn-primary:hover {
@@ -162,7 +172,7 @@ input:focus, textarea:focus, select:focus {
 
 .btn-danger {
   background: var(--color-danger);
-  color: #FFFFFF;
+  color: var(--color-on-danger);
 }
 
 .btn-outline {
@@ -192,8 +202,7 @@ input:focus, textarea:focus, select:focus {
   height: 56px;
   border-radius: 50%;
   background: var(--color-primary);
-  color: #FFFFFF;
-  box-shadow: var(--shadow-lg);
+  color: var(--color-on-primary);
   display: flex;
   align-items: center;
   justify-content: center;

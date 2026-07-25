@@ -1,12 +1,13 @@
 import { useState, useRef } from 'preact/hooks';
 import { PROVIDERS } from '../constants/providers';
 import { BARCODE_FORMATS, suggestFormat } from '../constants/barcodeFormats';
+import { CARD_COLORS, DEFAULT_CARD_COLOR } from '../utils/color';
 
 export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   const [providerName, setProviderName] = useState(initial?.providerName || '');
   const [cardNumber, setCardNumber] = useState(initial?.cardNumber || '');
   const [barcodeFormat, setBarcodeFormat] = useState(initial?.barcodeFormat || 'CODE128');
-  const [color, setColor] = useState(initial?.color || '#1565C0');
+  const [color, setColor] = useState(initial?.color || DEFAULT_CARD_COLOR);
   const [notes, setNotes] = useState(initial?.notes || '');
   const [suggestions, setSuggestions] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -144,14 +145,25 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
 
       <div class="form-group">
         <label class="form-label">Colore carta</label>
-        <div class="color-picker">
-          <input
-            type="color"
-            value={color}
-            onInput={e => setColor(e.target.value)}
-            class="color-input"
-          />
-          <span class="color-value">{color}</span>
+        <div class="color-swatches">
+          {CARD_COLORS.map(c => (
+            <button
+              key={c}
+              type="button"
+              class={`color-swatch ${color.toLowerCase() === c.toLowerCase() ? 'is-selected' : ''}`}
+              style={{ background: c }}
+              onClick={() => setColor(c)}
+              aria-label={`Colore ${c}`}
+              aria-pressed={color.toLowerCase() === c.toLowerCase()}
+            />
+          ))}
+          <label class="color-swatch color-custom" title="Scegli un colore">
+            <input
+              type="color"
+              value={color}
+              onInput={e => setColor(e.target.value)}
+            />
+          </label>
         </div>
       </div>
 
@@ -241,23 +253,50 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
           border-radius: 50%;
           flex-shrink: 0;
         }
-        .color-picker {
+        .color-swatches {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+          gap: var(--space-2);
+        }
+        .color-swatch {
+          position: relative;
+          aspect-ratio: 1;
+          border-radius: var(--radius-sm);
+          box-shadow: var(--shadow-sm);
+          -webkit-tap-highlight-color: transparent;
+          transition: transform 0.12s ease;
+        }
+        .color-swatch:active {
+          transform: scale(0.92);
+        }
+        .color-swatch.is-selected::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          border: 2px solid var(--color-surface);
+          box-shadow: 0 0 0 2px var(--color-text);
+        }
+        /* The free colour picker stays available, shown as a rainbow swatch. */
+        .color-custom {
           display: flex;
           align-items: center;
-          gap: 12px;
-        }
-        .color-input {
-          width: 48px;
-          height: 48px;
-          padding: 2px;
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-sm);
+          justify-content: center;
+          overflow: hidden;
+          background: conic-gradient(
+            from 180deg,
+            #A34F47, #A2663F, #877033, #55805F, #467C7D, #4A6E92, #6F5583, #97536B, #A34F47
+          );
           cursor: pointer;
         }
-        .color-value {
-          font-family: 'SF Mono', 'Menlo', monospace;
-          font-size: 14px;
-          color: var(--color-text-secondary);
+        .color-custom input {
+          position: absolute;
+          opacity: 0;
+          width: 100%;
+          height: 100%;
+          padding: 0;
+          border: none;
+          cursor: pointer;
         }
       `}</style>
     </form>

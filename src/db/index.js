@@ -1,5 +1,6 @@
 import { openDB } from 'idb';
 import { deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer } from '../utils/crypto';
+import { DEFAULT_CARD_COLOR } from '../utils/color';
 
 const DB_NAME = 'fidelity-cards-db';
 const DB_VERSION = 1;
@@ -108,7 +109,7 @@ export async function addCard(card) {
     cardNumber: card.cardNumber,
     barcodeFormat: card.barcodeFormat || 'CODE128',
     notes: card.notes || '',
-    color: card.color || '#1565C0',
+    color: card.color || DEFAULT_CARD_COLOR,
     logoUrl: card.logoUrl || '',
     createdAt: now,
     updatedAt: now

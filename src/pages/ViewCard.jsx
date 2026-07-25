@@ -5,7 +5,7 @@ import { BarcodeDisplay } from '../components/BarcodeDisplay';
 import { ShareModal } from '../components/ShareModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PageMessage } from '../components/PageMessage';
-import { getContrastColor, cardGradient } from '../utils/color';
+import { getContrastColor, cardGradient, DEFAULT_CARD_COLOR } from '../utils/color';
 
 export function ViewCard({ id, showToast }) {
   const [card, setCard] = useState(null);
@@ -70,7 +70,7 @@ export function ViewCard({ id, showToast }) {
     );
   }
 
-  const cardColor = card.color || '#1565C0';
+  const cardColor = card.color || DEFAULT_CARD_COLOR;
 
   return (
     <div class="page">

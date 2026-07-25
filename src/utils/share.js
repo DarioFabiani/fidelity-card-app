@@ -1,4 +1,5 @@
 import { deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer } from './crypto';
+import { DEFAULT_CARD_COLOR } from './color';
 
 function generatePin() {
   // 6-digit numeric PIN, easy to read aloud or type on any keyboard.
@@ -53,7 +54,7 @@ export async function decodeSharedCard(dataParam, pin) {
       providerName: payload.p,
       cardNumber: payload.n,
       barcodeFormat: payload.f || 'CODE128',
-      color: payload.c || '#1565C0',
+      color: payload.c || DEFAULT_CARD_COLOR,
       notes: payload.t || ''
     };
   } catch {

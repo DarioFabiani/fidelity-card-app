@@ -4,7 +4,7 @@ import { decodeSharedCard, isValidShareData } from '../utils/share';
 import { addCard } from '../db';
 import { BarcodeDisplay } from '../components/BarcodeDisplay';
 import { PageMessage } from '../components/PageMessage';
-import { getContrastColor, cardGradient } from '../utils/color';
+import { getContrastColor, cardGradient, DEFAULT_CARD_COLOR } from '../utils/color';
 
 export function SharedCard({ data, showToast }) {
   const [pin, setPin] = useState('');
@@ -140,8 +140,8 @@ export function SharedCard({ data, showToast }) {
       <div
         class="shared-card-header"
         style={{
-          background: cardGradient(card.color || '#1565C0'),
-          color: getContrastColor(card.color || '#1565C0')
+          background: cardGradient(card.color || DEFAULT_CARD_COLOR),
+          color: getContrastColor(card.color || DEFAULT_CARD_COLOR)
         }}
       >
         <h2 class="shared-card-name">{card.providerName}</h2>
