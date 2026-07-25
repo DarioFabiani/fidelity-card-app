@@ -1,17 +1,31 @@
 import { useRef, useEffect, useState } from 'preact/hooks';
-import { renderBarcode } from '../utils/barcode';
+import { renderBarcode, renderQrCode } from '../utils/barcode';
 
 export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = true }) {
   const svgRef = useRef(null);
+  const canvasRef = useRef(null);
+  const isQrCode = format === 'QR_CODE';
   const [error, setError] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
-    if (svgRef.current && value) {
+    let cancelled = false;
+
+    if (isQrCode) {
+      if (canvasRef.current && value) {
+        renderQrCode(canvasRef.current, value).then(ok => {
+          if (!cancelled) setError(!ok);
+        });
+      }
+    } else if (svgRef.current && value) {
       const ok = renderBarcode(svgRef.current, value, format);
       setError(!ok);
     }
-  }, [value, format]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [value, format, isQrCode]);
 
   if (error) {
     return (
@@ -27,7 +41,11 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
         class={`barcode-container ${fullscreen ? 'barcode-fullscreen' : ''}`}
         onClick={fullscreenable ? () => setFullscreen(!fullscreen) : undefined}
       >
-        <svg ref={svgRef} class="barcode-svg" />
+        {isQrCode ? (
+          <canvas ref={canvasRef} class="barcode-svg barcode-qr" />
+        ) : (
+          <svg ref={svgRef} class="barcode-svg" />
+        )}
         {fullscreenable && !fullscreen && (
           <p class="barcode-hint">Tocca per ingrandire</p>
         )}
@@ -51,6 +69,13 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
         .barcode-svg {
           width: 100%;
           height: auto;
+        }
+        .barcode-qr {
+          max-width: 240px;
+        }
+        .barcode-fullscreen .barcode-qr {
+          width: 100%;
+          max-width: 60vh;
         }
         .barcode-hint {
           font-size: 12px;

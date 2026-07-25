@@ -2,6 +2,8 @@ import Router from 'preact-router';
 import { useState, useCallback } from 'preact/hooks';
 import { Header } from './components/Header';
 import { Toast } from './components/Toast';
+import { UnlockScreen } from './components/UnlockScreen';
+import { isEncryptionEnabled, hasEncryptionKey } from './db';
 import { Home } from './pages/Home';
 import { AddCard } from './pages/AddCard';
 import { EditCard } from './pages/EditCard';
@@ -11,6 +13,7 @@ import { Settings } from './pages/Settings';
 
 export function App() {
   const [toast, setToast] = useState(null);
+  const [unlocked, setUnlocked] = useState(() => !isEncryptionEnabled() || hasEncryptionKey());
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
@@ -19,6 +22,10 @@ export function App() {
   const hideToast = useCallback(() => {
     setToast(null);
   }, []);
+
+  if (!unlocked) {
+    return <UnlockScreen onUnlock={() => setUnlocked(true)} />;
+  }
 
   return (
     <>

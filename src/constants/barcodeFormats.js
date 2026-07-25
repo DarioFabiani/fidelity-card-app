@@ -4,7 +4,9 @@ export const BARCODE_FORMATS = [
   { value: 'EAN8', label: 'EAN-8', description: '8 cifre' },
   { value: 'UPC', label: 'UPC-A', description: '12 cifre (retail USA)' },
   { value: 'ITF14', label: 'ITF-14', description: '14 cifre' },
-  { value: 'CODE39', label: 'Code 39', description: 'Alfanumerico (tessere)' }
+  { value: 'CODE39', label: 'Code 39', description: 'Alfanumerico (tessere)' },
+  { value: 'QR_CODE', label: 'QR Code', description: 'Codice QR (carte digitali moderne)' },
+  { value: 'CODABAR', label: 'Codabar', description: 'Alfanumerico (alcune tessere sanitarie/fedeltà)' }
 ];
 
 export function suggestFormat(cardNumber) {
