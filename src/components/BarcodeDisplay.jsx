@@ -1,5 +1,4 @@
 import { useRef, useEffect, useState } from 'preact/hooks';
-import { renderBarcode, renderQrCode } from '../utils/barcode';
 
 export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = true }) {
   const svgRef = useRef(null);
@@ -11,16 +10,23 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
   useEffect(() => {
     let cancelled = false;
 
-    if (isQrCode) {
-      if (canvasRef.current && value) {
-        renderQrCode(canvasRef.current, value).then(ok => {
-          if (!cancelled) setError(!ok);
-        });
+    // jsbarcode/qrcode (~92 kB combined) are only needed once a card with a
+    // barcode is actually viewed, so they're fetched on demand rather than
+    // sitting in the entry chunk for everyone who just opens the list.
+    import('../utils/barcode').then(({ renderBarcode, renderQrCode }) => {
+      if (cancelled) return;
+
+      if (isQrCode) {
+        if (canvasRef.current && value) {
+          renderQrCode(canvasRef.current, value).then(ok => {
+            if (!cancelled) setError(!ok);
+          });
+        }
+      } else if (svgRef.current && value) {
+        const ok = renderBarcode(svgRef.current, value, format);
+        if (!cancelled) setError(!ok);
       }
-    } else if (svgRef.current && value) {
-      const ok = renderBarcode(svgRef.current, value, format);
-      setError(!ok);
-    }
+    });
 
     return () => {
       cancelled = true;

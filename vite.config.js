@@ -4,6 +4,19 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: '/fidelity-card-app/',
+  build: {
+    rollupOptions: {
+      output: {
+        // Without this the qrcode package's internal entry file name
+        // ('browser.js') leaks into the chunk name, which is fragile to a
+        // dependency version bump. Naming it explicitly keeps the pattern
+        // below (and its cache entry) stable.
+        manualChunks(id) {
+          if (id.includes('node_modules/qrcode/')) return 'qrcode';
+        }
+      }
+    }
+  },
   plugins: [
     preact(),
     VitePWA({
@@ -40,10 +53,12 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // The ZXing scanner chunk is ~415 kB and only needed when the camera
-        // is actually used. Precaching it made every user download it on first
-        // load and again after each update, cancelling out the lazy import.
-        globIgnores: ['**/BarcodeScanner-*.js'],
+        // The ZXing scanner chunk (~415 kB) and the jsbarcode/qrcode chunks
+        // (~92 kB combined) are only needed when a barcode is actually
+        // scanned, viewed, or shared. Precaching them made every user
+        // download them on first load and again after each update,
+        // cancelling out the lazy imports.
+        globIgnores: ['**/BarcodeScanner-*.js', '**/barcode-*.js', '**/qrcode-*.js'],
         runtimeCaching: [
           {
             urlPattern: /\/assets\/BarcodeScanner-.*\.js$/,
@@ -51,6 +66,14 @@ export default defineConfig({
             options: {
               cacheName: 'barcode-scanner',
               expiration: { maxEntries: 2 }
+            }
+          },
+          {
+            urlPattern: /\/assets\/(barcode|qrcode)-.*\.js$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'barcode-render',
+              expiration: { maxEntries: 4 }
             }
           }
         ]

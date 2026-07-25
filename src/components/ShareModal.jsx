@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'preact/hooks';
-import QRCode from 'qrcode';
 import { getShareLink, shareCard, copyToClipboard, formatShareCode } from '../utils/share';
+import { ShareIcon } from './icons';
 
 export function ShareModal({ card, onClose, showToast }) {
   const canvasRef = useRef(null);
@@ -20,10 +20,15 @@ export function ShareModal({ card, onClose, showToast }) {
       setCode(code);
       setReady(true);
       if (canvasRef.current) {
-        QRCode.toCanvas(canvasRef.current, url, {
-          width: 220,
-          margin: 2,
-          color: { dark: '#000000', light: '#FFFFFF' }
+        // Loaded on demand: qrcode (~24 kB) is only needed once this modal
+        // actually opens, not on every app load.
+        import('qrcode').then(({ default: QRCode }) => {
+          if (cancelled || !canvasRef.current) return;
+          QRCode.toCanvas(canvasRef.current, url, {
+            width: 220,
+            margin: 2,
+            color: { dark: '#000000', light: '#FFFFFF' }
+          });
         });
       }
     });
@@ -74,7 +79,7 @@ export function ShareModal({ card, onClose, showToast }) {
         </div>
 
         <div class={`share-code ${sent ? 'is-highlighted' : ''}`}>
-          <span class="share-code-label">Codice di sblocco</span>
+          <span class="label-caps share-code-label">Codice di sblocco</span>
           <span class="share-code-value">{ready ? formatShareCode(code) : '···· ····'}</span>
           <p class="share-code-hint">
             {sent
@@ -102,10 +107,7 @@ export function ShareModal({ card, onClose, showToast }) {
             <>
               {navigator.share && (
                 <button class="btn btn-primary btn-block" onClick={handleShare} disabled={!ready}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                  </svg>
+                  <ShareIcon size={18} />
                   Condividi
                 </button>
               )}
@@ -157,18 +159,14 @@ export function ShareModal({ card, onClose, showToast }) {
           }
           .share-code-label {
             font-size: 12px;
-            font-weight: 600;
-            color: var(--color-text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
           }
           .share-code-value {
-            font-size: 26px;
+            font-size: var(--text-2xl);
             font-weight: 700;
             letter-spacing: 4px;
             color: var(--color-primary);
             margin-top: 4px;
-            font-family: 'SF Mono', 'Menlo', monospace;
+            font-family: var(--font-mono);
           }
           .share-code.is-highlighted {
             border-style: solid;
