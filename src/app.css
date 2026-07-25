@@ -340,3 +340,76 @@ body.has-install-banner {
   white-space: nowrap;
   border: 0;
 }
+
+/* Card rows. These live here rather than in the component because CardItem
+   renders once per card: an inline <style> would be duplicated in the DOM
+   for every row in the list. */
+.card-item-wrap {
+  position: relative;
+}
+.card-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-5);
+  padding-right: 60px;
+  min-height: 88px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  text-align: left;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* Soft sheen across the card face, keeps flat brand colours from looking dull. */
+.card-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 80% at 100% 0%, rgba(255,255,255,0.18), transparent 60%);
+  pointer-events: none;
+  z-index: -1;
+}
+.card-item:active {
+  transform: scale(0.985);
+  box-shadow: var(--shadow-sm);
+}
+.card-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.card-provider {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-number {
+  font-size: var(--text-sm);
+  opacity: 0.88;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.card-fav {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease;
+}
+.card-fav:active {
+  transform: translateY(-50%) scale(0.85);
+}

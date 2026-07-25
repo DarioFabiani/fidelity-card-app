@@ -1,17 +1,55 @@
 import { deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer } from './crypto';
 import { DEFAULT_CARD_COLOR } from './color';
 
-function generatePin() {
-  // 6-digit numeric PIN, easy to read aloud or type on any keyboard.
-  return String(Math.floor(100000 + Math.random() * 900000));
+// Excludes characters that are easily confused when read aloud or copied by
+// hand: 0/O, 1/I/L, 5/S, 8/B. 28 symbols, 8 of them -> ~38 bits.
+const CODE_ALPHABET = '2346789ACDEFGHJKMNPQRTUVWXYZ';
+const CODE_LENGTH = 8;
+
+/**
+ * Share code used to derive the link's encryption key.
+ *
+ * Uses crypto.getRandomValues, not Math.random: the shared link is public, so
+ * an attacker holds the ciphertext and can brute-force offline with no rate
+ * limiting. A 6-digit PIN from a predictable PRNG (V8's Math.random is
+ * xorshift128+, not a CSPRNG) falls in seconds on a GPU; this keeps the
+ * search space out of reach while staying dictatable over the phone.
+ *
+ * Rejection sampling keeps the distribution uniform — taking a raw byte mod 28
+ * would make the first few letters more likely than the rest.
+ */
+function generateShareCode() {
+  const max = Math.floor(256 / CODE_ALPHABET.length) * CODE_ALPHABET.length;
+  let code = '';
+  while (code.length < CODE_LENGTH) {
+    const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
+    for (const byte of bytes) {
+      if (byte < max && code.length < CODE_LENGTH) {
+        code += CODE_ALPHABET[byte % CODE_ALPHABET.length];
+      }
+    }
+  }
+  return code;
+}
+
+/** Groups the code in two blocks so it is easier to read out: ABCD-EFGH. */
+export function formatShareCode(code) {
+  return code.length === CODE_LENGTH
+    ? `${code.slice(0, 4)}-${code.slice(4)}`
+    : code;
+}
+
+/** Accepts the code however the recipient typed it: spaces, dashes, lowercase. */
+export function normalizeShareCode(input) {
+  return (input || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
 /**
  * Builds a shareable link for a card. The card payload is encrypted with
  * AES-256-GCM under a key derived (PBKDF2) from a freshly generated random
- * PIN, so anyone who only intercepts the link cannot read the card data —
- * the PIN must be communicated separately (voice, another message, ...).
- * Returns both the URL (salt + ciphertext, base64) and the PIN to show/share
+ * code, so anyone who only intercepts the link cannot read the card data —
+ * the code must be communicated separately (voice, another message, ...).
+ * Returns both the URL (salt + ciphertext, base64) and the code to share
  * out of band.
  */
 export async function encodeCardForShare(card) {
@@ -23,23 +61,25 @@ export async function encodeCardForShare(card) {
     t: card.notes || ''
   };
 
-  const pin = generatePin();
+  const code = generateShareCode();
   const salt = generateSalt();
-  const key = await deriveKey(pin, salt);
+  const key = await deriveKey(code, salt);
   const sealed = await encryptJSON(payload, key);
 
   const combined = `${bufferToBase64(salt)}.${sealed}`;
   const base = window.location.origin + '/fidelity-card-app/';
-  return { url: `${base}shared?data=${combined}`, pin };
+  return { url: `${base}shared?data=${combined}`, code };
 }
 
 /**
- * Reverses encodeCardForShare(). Needs the PIN the sender communicated
- * separately. Returns null if the data param is malformed, or if the PIN is
- * wrong (AES-GCM authentication failure surfaces as a decrypt rejection).
+ * Reverses encodeCardForShare(). Needs the code the sender communicated
+ * separately, in whatever shape the recipient typed it. Returns null if the
+ * data param is malformed, or if the code is wrong (AES-GCM authentication
+ * failure surfaces as a decrypt rejection).
  */
-export async function decodeSharedCard(dataParam, pin) {
-  if (!dataParam || !pin) return null;
+export async function decodeSharedCard(dataParam, code) {
+  const secret = normalizeShareCode(code);
+  if (!dataParam || !secret) return null;
   const separatorIndex = dataParam.indexOf('.');
   if (separatorIndex <= 0 || separatorIndex === dataParam.length - 1) return null;
 
@@ -48,7 +88,7 @@ export async function decodeSharedCard(dataParam, pin) {
 
   try {
     const salt = base64ToBuffer(saltB64);
-    const key = await deriveKey(pin, salt);
+    const key = await deriveKey(secret, salt);
     const payload = await decryptJSON(sealed, key);
     return {
       providerName: payload.p,
@@ -64,9 +104,9 @@ export async function decodeSharedCard(dataParam, pin) {
 
 /**
  * Checks whether a data param has the minimal shape produced by
- * encodeCardForShare (salt + '.' + ciphertext), without needing the PIN.
+ * encodeCardForShare (salt + '.' + ciphertext), without needing the code.
  * Used to distinguish a structurally broken/missing link ("Link non
- * valido") from a valid link whose PIN just hasn't been entered yet.
+ * valido") from a valid link whose code just hasn't been entered yet.
  */
 export function isValidShareData(dataParam) {
   if (typeof dataParam !== 'string' || !dataParam) return false;
@@ -75,22 +115,25 @@ export function isValidShareData(dataParam) {
 }
 
 export async function shareCard(card, shareData) {
-  const { url, pin } = shareData || (await encodeCardForShare(card));
+  const { url, code } = shareData || (await encodeCardForShare(card));
 
   if (navigator.share) {
     try {
+      // The code is deliberately NOT included here. Putting it in the same
+      // message as the link would hand both halves to the same chat, which is
+      // exactly what the separate channel is meant to prevent.
       await navigator.share({
         title: `Carta ${card.providerName}`,
-        text: `Ecco la mia carta fedeltà ${card.providerName}. PIN: ${pin}`,
+        text: `Ecco la mia carta fedeltà ${card.providerName}`,
         url
       });
-      return { success: true, method: 'share', pin };
+      return { success: true, method: 'share', code };
     } catch (err) {
       if (err.name === 'AbortError') return { success: false, method: 'cancelled' };
     }
   }
 
-  return { success: false, method: 'fallback', url, pin };
+  return { success: false, method: 'fallback', url, code };
 }
 
 export async function copyToClipboard(text) {

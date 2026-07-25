@@ -28,21 +28,16 @@ export function SearchBar({ value, onInput }) {
         .search-input {
           padding-left: 42px;
           border-radius: 999px;
-          background: color-mix(in srgb, var(--color-surface) 70%, transparent);
-          -webkit-backdrop-filter: blur(16px) saturate(180%);
-          backdrop-filter: blur(16px) saturate(180%);
-          border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+          /* Opaque on purpose: unlike the header and the sheets, this element
+             scrolls with the content, so a backdrop-filter here would be
+             recomputed every frame against a backdrop that is almost always a
+             flat --color-bg. Costly, and invisible. */
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
           height: 46px;
           box-shadow:
             inset 0 1px 0 color-mix(in srgb, #FFFFFF 45%, transparent),
             var(--shadow-sm);
-        }
-        @media (prefers-reduced-transparency: reduce) {
-          .search-input {
-            background: var(--color-surface);
-            -webkit-backdrop-filter: none;
-            backdrop-filter: none;
-          }
         }
         .search-input::-webkit-search-cancel-button {
           -webkit-appearance: none;

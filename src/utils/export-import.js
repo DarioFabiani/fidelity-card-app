@@ -62,6 +62,9 @@ export function pickImportFile() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,application/json';
+    // Dismissing the picker fires `cancel`, never `change`. Without this the
+    // promise would hang forever and leave the import button disabled.
+    input.addEventListener('cancel', () => resolve(null));
     input.onchange = async (e) => {
       const file = e.target.files[0];
       if (!file) return resolve(null);

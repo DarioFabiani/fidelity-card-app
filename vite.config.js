@@ -39,7 +39,21 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}']
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // The ZXing scanner chunk is ~415 kB and only needed when the camera
+        // is actually used. Precaching it made every user download it on first
+        // load and again after each update, cancelling out the lazy import.
+        globIgnores: ['**/BarcodeScanner-*.js'],
+        runtimeCaching: [
+          {
+            urlPattern: /\/assets\/BarcodeScanner-.*\.js$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'barcode-scanner',
+              expiration: { maxEntries: 2 }
+            }
+          }
+        ]
       }
     })
   ]

@@ -20,20 +20,39 @@ export function ViewCard({ id, showToast }) {
     });
   }, [id]);
 
+  // Keeps the screen awake while the barcode is on display at a till.
   useEffect(() => {
     let wakeLock = null;
+    let cancelled = false;
+
     async function requestWakeLock() {
-      if ('wakeLock' in navigator) {
-        try { wakeLock = await navigator.wakeLock.request('screen'); } catch {}
+      if (!('wakeLock' in navigator) || cancelled) return;
+      // Drop any lock still held before asking for another, otherwise every
+      // return to the foreground would leak one.
+      if (wakeLock) {
+        try { await wakeLock.release(); } catch {}
+        wakeLock = null;
       }
+      try {
+        const lock = await navigator.wakeLock.request('screen');
+        // The request can resolve after the user has already left the page.
+        if (cancelled) {
+          lock.release().catch(() => {});
+        } else {
+          wakeLock = lock;
+        }
+      } catch {}
     }
+
     requestWakeLock();
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') requestWakeLock();
     };
     document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
-      if (wakeLock) wakeLock.release();
+      cancelled = true;
+      if (wakeLock) wakeLock.release().catch(() => {});
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);

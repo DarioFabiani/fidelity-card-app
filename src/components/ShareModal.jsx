@@ -1,21 +1,21 @@
 import { useRef, useEffect, useState } from 'preact/hooks';
 import QRCode from 'qrcode';
-import { encodeCardForShare, shareCard, copyToClipboard } from '../utils/share';
+import { encodeCardForShare, shareCard, copyToClipboard, formatShareCode } from '../utils/share';
 
 export function ShareModal({ card, onClose, showToast }) {
   const canvasRef = useRef(null);
   const [shareUrl, setShareUrl] = useState('');
-  const [pin, setPin] = useState('');
+  const [code, setCode] = useState('');
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setReady(false);
 
-    encodeCardForShare(card).then(({ url, pin }) => {
+    encodeCardForShare(card).then(({ url, code }) => {
       if (cancelled) return;
       setShareUrl(url);
-      setPin(pin);
+      setCode(code);
       setReady(true);
       if (canvasRef.current) {
         QRCode.toCanvas(canvasRef.current, url, {
@@ -31,7 +31,7 @@ export function ShareModal({ card, onClose, showToast }) {
 
   const handleShare = async () => {
     if (!ready) return;
-    const result = await shareCard(card, { url: shareUrl, pin });
+    const result = await shareCard(card, { url: shareUrl, code });
     if (result.success) {
       onClose();
     }
@@ -41,7 +41,7 @@ export function ShareModal({ card, onClose, showToast }) {
     if (!ready) return;
     const ok = await copyToClipboard(shareUrl);
     if (ok) {
-      showToast('Link copiato! Ricorda di comunicare anche il PIN');
+      showToast('Link copiato! Ricorda di comunicare anche il codice');
     } else {
       showToast('Errore nella copia', 'error');
     }
@@ -57,11 +57,11 @@ export function ShareModal({ card, onClose, showToast }) {
           <p class="share-qr-hint">Scansiona il QR code con un altro telefono</p>
         </div>
 
-        <div class="share-pin">
-          <span class="share-pin-label">PIN di sblocco</span>
-          <span class="share-pin-code">{ready ? pin : '· · · · · ·'}</span>
-          <p class="share-pin-hint">
-            Comunica questo PIN al destinatario (a voce o con un altro messaggio): senza non può aprire il link.
+        <div class="share-code">
+          <span class="share-code-label">Codice di sblocco</span>
+          <span class="share-code-value">{ready ? formatShareCode(code) : '···· ····'}</span>
+          <p class="share-code-hint">
+            Comunica questo codice al destinatario a voce o con un altro messaggio: senza, il link non si apre. Non viene incluso nella condivisione, proprio per tenerlo su un canale diverso.
           </p>
         </div>
 
@@ -104,7 +104,7 @@ export function ShareModal({ card, onClose, showToast }) {
             color: var(--color-text-secondary);
             margin-top: 8px;
           }
-          .share-pin {
+          .share-code {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -115,14 +115,14 @@ export function ShareModal({ card, onClose, showToast }) {
             padding: 14px;
             margin-bottom: 20px;
           }
-          .share-pin-label {
+          .share-code-label {
             font-size: 12px;
             font-weight: 600;
             color: var(--color-text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
           }
-          .share-pin-code {
+          .share-code-value {
             font-size: 26px;
             font-weight: 700;
             letter-spacing: 4px;
@@ -130,7 +130,7 @@ export function ShareModal({ card, onClose, showToast }) {
             margin-top: 4px;
             font-family: 'SF Mono', 'Menlo', monospace;
           }
-          .share-pin-hint {
+          .share-code-hint {
             font-size: 12px;
             color: var(--color-text-secondary);
             margin-top: 6px;

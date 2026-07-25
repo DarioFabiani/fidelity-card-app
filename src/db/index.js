@@ -48,6 +48,10 @@ function getStoredSalt() {
 // and sorted without decrypting every card.
 async function encryptCard(card) {
   if (!encryptionKey) throw new Error('Chiave di cifratura non impostata');
+  // Guard against sealing an already-sealed record: its plaintext fields are
+  // gone, so re-encrypting would overwrite `_enc` with a blob of undefineds
+  // and destroy the only copy of the data.
+  if (card._enc) throw new Error('Carta già cifrata: rifiuto di ri-cifrarla');
   const { providerName, cardNumber, notes, ...rest } = card;
   const sealed = await encryptJSON(
     { providerName, cardNumber, notes: notes || '' },
@@ -76,28 +80,51 @@ function getDB() {
   });
 }
 
+/**
+ * Detects the inconsistent state where sealed records exist but the enabled
+ * flag is off (an interrupted setup, or a vault written by an older build) and
+ * turns the flag back on so the app asks to unlock instead of treating
+ * ciphertext as plaintext. Returns true when encryption should be considered
+ * active. Call before deciding whether to show the unlock screen.
+ */
+export async function repairEncryptionState() {
+  if (isEncryptionEnabled()) return true;
+
+  const db = await getDB();
+  const cards = await db.getAll(STORE_NAME);
+  if (!cards.some(c => c._enc)) return false;
+
+  // Sealed data with the flag down. If the salt survived we can recover by
+  // re-enabling; without it the key is underivable and we must not let the
+  // caller carry on as if the vault were readable.
+  if (!localStorage.getItem(ENC_SALT_KEY)) {
+    throw new Error('Dati cifrati ma parametri di cifratura mancanti: impossibile sbloccare su questo dispositivo.');
+  }
+  localStorage.setItem(ENC_ENABLED_KEY, 'true');
+  return true;
+}
+
 export async function getAllCards() {
   const db = await getDB();
   const cards = await db.getAll(STORE_NAME);
   const sorted = cards.sort((a, b) => b.createdAt - a.createdAt);
-  if (isEncryptionEnabled()) {
-    // Locked (encryption on, key not in memory yet): never leak ciphertext
-    // to the UI, just report no cards until unlock() succeeds.
-    if (!hasEncryptionKey()) return [];
-    return Promise.all(sorted.map(decryptCard));
+
+  // Locked, or sealed records with the flag somehow off: never hand ciphertext
+  // to the UI — it would render as a card with undefined fields.
+  if (!hasEncryptionKey()) {
+    return sorted.some(c => c._enc) ? [] : sorted;
   }
-  return sorted;
+  return Promise.all(sorted.map(decryptCard));
 }
 
 export async function getCard(id) {
   const db = await getDB();
   const card = await db.get(STORE_NAME, id);
   if (!card) return card;
-  if (isEncryptionEnabled()) {
-    if (!hasEncryptionKey()) return null;
-    return decryptCard(card);
+  if (!hasEncryptionKey()) {
+    return card._enc ? null : card;
   }
-  return card;
+  return decryptCard(card);
 }
 
 export async function addCard(card) {
@@ -181,20 +208,39 @@ export async function enableEncryption(password, existingCards) {
   const db = await getDB();
   const salt = generateSalt();
   const key = await deriveKey(password, salt);
+  const verifier = await encryptJSON(VERIFIER_PLAINTEXT, key);
 
   setEncryptionKey(key);
+
+  // Order matters. The flag goes down BEFORE any card is sealed, so an
+  // interruption can only ever leave "flag on, some cards still plaintext" —
+  // which reads fine, because decryptCard passes untouched records through.
+  // The reverse order would leave sealed cards with the flag off: the app
+  // would think it is unencrypted, hand ciphertext to the UI, and a second
+  // setup attempt would overwrite it.
   localStorage.setItem(ENC_SALT_KEY, bufferToBase64(salt));
-  localStorage.setItem(ENC_VERIFIER_KEY, await encryptJSON(VERIFIER_PLAINTEXT, key));
-
-  const encryptedCards = await Promise.all(existingCards.map(encryptCard));
-
-  const tx = db.transaction(STORE_NAME, 'readwrite');
-  for (const card of encryptedCards) {
-    await tx.store.put(card);
-  }
-  await tx.done;
-
+  localStorage.setItem(ENC_VERIFIER_KEY, verifier);
   localStorage.setItem(ENC_ENABLED_KEY, 'true');
+
+  try {
+    const encryptedCards = await Promise.all(
+      existingCards.filter(c => !c._enc).map(encryptCard)
+    );
+
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    for (const card of encryptedCards) {
+      await tx.store.put(card);
+    }
+    await tx.done;
+  } catch (err) {
+    // Nothing was sealed under a key we are about to forget: roll the flags
+    // back so the vault stays plainly readable rather than half-locked.
+    localStorage.removeItem(ENC_ENABLED_KEY);
+    localStorage.removeItem(ENC_SALT_KEY);
+    localStorage.removeItem(ENC_VERIFIER_KEY);
+    clearEncryptionKey();
+    throw err;
+  }
 }
 
 /**
@@ -241,20 +287,24 @@ export async function unlock(password) {
     return true;
   }
 
-  // Vault set up before verifiers existed. Check against an encrypted card
-  // instead; if the vault is also empty there is no key to contradict, so any
-  // password is accepted. Either way a verifier is written, which pins the key
-  // from now on — later unlocks take the branch above and reject the rest.
+  // Vault set up before verifiers existed: check against a sealed card.
   const db = await getDB();
   const raw = await db.getAll(STORE_NAME);
   const sample = raw.find(c => c._enc);
 
-  if (sample) {
-    try {
-      await decryptJSON(sample._enc, key);
-    } catch {
-      return false;
-    }
+  if (!sample) {
+    // Empty legacy vault — nothing to validate against. Accept so the user
+    // isn't locked out of their own (empty) vault, but deliberately do NOT
+    // write a verifier: doing so would pin whatever password was typed and
+    // permanently reject the real one.
+    setEncryptionKey(key);
+    return true;
+  }
+
+  try {
+    await decryptJSON(sample._enc, key);
+  } catch {
+    return false;
   }
 
   setEncryptionKey(key);

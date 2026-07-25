@@ -7,10 +7,10 @@ import { PageMessage } from '../components/PageMessage';
 import { getContrastColor, cardGradient, DEFAULT_CARD_COLOR } from '../utils/color';
 
 export function SharedCard({ data, showToast }) {
-  const [pin, setPin] = useState('');
+  const [code, setCode] = useState('');
   const [card, setCard] = useState(null);
   const [unlocking, setUnlocking] = useState(false);
-  const [pinError, setPinError] = useState('');
+  const [codeError, setCodeError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -18,18 +18,18 @@ export function SharedCard({ data, showToast }) {
 
   const handleUnlock = async (e) => {
     e.preventDefault();
-    if (!pin || unlocking) return;
+    if (!code || unlocking) return;
     setUnlocking(true);
-    setPinError('');
+    setCodeError('');
     try {
-      const decoded = await decodeSharedCard(data, pin);
+      const decoded = await decodeSharedCard(data, code);
       if (decoded) {
         setCard(decoded);
       } else {
-        setPinError('PIN errato. Controlla e riprova.');
+        setCodeError('Codice errato. Controlla e riprova.');
       }
     } catch {
-      setPinError('PIN errato. Controlla e riprova.');
+      setCodeError('Codice errato. Controlla e riprova.');
     } finally {
       setUnlocking(false);
     }
@@ -76,22 +76,25 @@ export function SharedCard({ data, showToast }) {
         </div>
 
         <div class="shared-card-unlock">
-          <h2 class="shared-card-unlock-title">Inserisci il PIN</h2>
+          <h2 class="shared-card-unlock-title">Inserisci il codice</h2>
           <p class="shared-card-unlock-desc">
-            Chi ti ha inviato il link ti ha comunicato (a voce o con un altro messaggio) un PIN a 6 cifre: inseriscilo per vedere la carta.
+            Chi ti ha inviato il link ti ha comunicato a parte un codice di 8 caratteri: inseriscilo per vedere la carta.
           </p>
           <form onSubmit={handleUnlock}>
             <input
               type="text"
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="PIN a 6 cifre"
-              value={pin}
-              onInput={e => setPin(e.target.value.replace(/\D/g, ''))}
+              inputMode="text"
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellcheck={false}
+              maxLength={12}
+              placeholder="es. K7M2-P9XR"
+              value={code}
+              onInput={e => setCode(e.target.value)}
               autoFocus
             />
-            {pinError && <p class="shared-card-unlock-error">{pinError}</p>}
-            <button type="submit" class="btn btn-primary btn-block" disabled={unlocking || !pin}>
+            {codeError && <p class="shared-card-unlock-error">{codeError}</p>}
+            <button type="submit" class="btn btn-primary btn-block" disabled={unlocking || !code}>
               {unlocking ? 'Sblocco...' : 'Sblocca'}
             </button>
           </form>

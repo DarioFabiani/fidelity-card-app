@@ -150,8 +150,10 @@ export function Settings({ showToast }) {
           onSubmit={async (password) => {
             try {
               await enableEncryption(password, await getAllCards());
-            } catch {
-              return 'Errore nell\'attivazione della cifratura';
+            } catch (err) {
+              // Surface the real reason: hiding it behind a generic string
+              // left the user with no idea what state the vault was in.
+              return err?.message || 'Errore nell\'attivazione della cifratura';
             }
             setEncryptionEnabled(true);
             setShowSetup(false);
