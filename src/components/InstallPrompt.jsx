@@ -38,7 +38,15 @@ export function InstallPrompt() {
     localStorage.setItem('install-dismissed', '1');
   };
 
-  if (dismissed || (!deferredPrompt && !showIosHint)) return null;
+  const visible = !dismissed && (deferredPrompt || showIosHint);
+
+  // Tells the layout to lift the FAB so the banner never covers it.
+  useEffect(() => {
+    document.body.classList.toggle('has-install-banner', Boolean(visible));
+    return () => document.body.classList.remove('has-install-banner');
+  }, [visible]);
+
+  if (!visible) return null;
 
   return (
     <div class="install-banner">
@@ -63,18 +71,39 @@ export function InstallPrompt() {
           bottom: 0;
           left: 0;
           right: 0;
-          background: var(--color-surface);
-          border-top: 1px solid var(--color-border);
-          padding: 12px 16px;
+          background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+          -webkit-backdrop-filter: blur(22px) saturate(180%);
+          backdrop-filter: blur(22px) saturate(180%);
+          border-top: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+          padding: var(--space-3) var(--space-4);
+          padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
+          gap: var(--space-3);
           z-index: 100;
-          box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+          box-shadow:
+            inset 0 1px 0 color-mix(in srgb, #FFFFFF 45%, transparent),
+            0 -2px 12px rgba(0,0,0,0.1);
+          animation: slideUp 0.3s ease;
+        }
+        /* Without backdrop-filter the translucent background never gets
+           blurred, leaving the page showing through the banner. The header and
+           the sheets already guard for this; this one was missing it. */
+        @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+          .install-banner {
+            background: var(--color-surface);
+          }
+        }
+        @media (prefers-reduced-transparency: reduce) {
+          .install-banner {
+            background: var(--color-surface);
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+          }
         }
         .install-text {
-          font-size: 13px;
+          font-size: var(--text-sm);
           flex: 1;
         }
         .install-actions {

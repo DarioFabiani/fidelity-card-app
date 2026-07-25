@@ -1,19 +1,46 @@
 import { useRef, useEffect, useState } from 'preact/hooks';
-import { renderBarcode } from '../utils/barcode';
 
 export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = true }) {
   const svgRef = useRef(null);
+  const canvasRef = useRef(null);
+  const isQrCode = format === 'QR_CODE';
   const [error, setError] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
-    if (svgRef.current && value) {
-      const ok = renderBarcode(svgRef.current, value, format);
-      setError(!ok);
-    }
-  }, [value, format]);
+    let cancelled = false;
+
+    // jsbarcode/qrcode (~92 kB combined) are only needed once a card with a
+    // barcode is actually viewed, so they're fetched on demand rather than
+    // sitting in the entry chunk for everyone who just opens the list.
+    import('../utils/barcode').then(({ renderBarcode, renderQrCode }) => {
+      if (cancelled) return;
+
+      if (isQrCode) {
+        if (canvasRef.current && value) {
+          renderQrCode(canvasRef.current, value).then(ok => {
+            if (!cancelled) setError(!ok);
+          });
+        }
+      } else if (svgRef.current && value) {
+        const ok = renderBarcode(svgRef.current, value, format);
+        if (!cancelled) setError(!ok);
+      }
+    }).catch(() => {
+      // The chunk is precached, so this should not happen — but an unhandled
+      // rejection here would leave a blank white box with no explanation.
+      if (!cancelled) setError(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [value, format, isQrCode]);
 
   if (error) {
+    // Styles live in app.css, not in the success branch's <style> below:
+    // that block never renders when this early return fires, which left the
+    // message as unstyled bare text.
     return (
       <div class="barcode-error">
         Impossibile generare il codice a barre
@@ -27,7 +54,11 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
         class={`barcode-container ${fullscreen ? 'barcode-fullscreen' : ''}`}
         onClick={fullscreenable ? () => setFullscreen(!fullscreen) : undefined}
       >
-        <svg ref={svgRef} class="barcode-svg" />
+        {isQrCode ? (
+          <canvas ref={canvasRef} class="barcode-svg barcode-qr" />
+        ) : (
+          <svg ref={svgRef} class="barcode-svg" />
+        )}
         {fullscreenable && !fullscreen && (
           <p class="barcode-hint">Tocca per ingrandire</p>
         )}
@@ -51,6 +82,13 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
         .barcode-svg {
           width: 100%;
           height: auto;
+        }
+        .barcode-qr {
+          max-width: 240px;
+        }
+        .barcode-fullscreen .barcode-qr {
+          width: 100%;
+          max-width: 60vh;
         }
         .barcode-hint {
           font-size: 12px;
@@ -82,15 +120,6 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
           font-size: 16px;
           font-weight: 600;
           cursor: pointer;
-        }
-        .barcode-error {
-          background: var(--color-surface);
-          border: 1px dashed var(--color-border);
-          border-radius: var(--radius);
-          padding: 24px;
-          text-align: center;
-          color: var(--color-text-secondary);
-          font-size: 14px;
         }
       `}</style>
     </>

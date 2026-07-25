@@ -1,8 +1,14 @@
 import { route } from 'preact-router';
 import { useState, useEffect } from 'preact/hooks';
-import { getCard, deleteCard } from '../db';
+import { getCard, deleteCard, toggleFavorite } from '../db';
 import { BarcodeDisplay } from '../components/BarcodeDisplay';
+import { CardBanner } from '../components/CardBanner';
 import { ShareModal } from '../components/ShareModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { PageMessage } from '../components/PageMessage';
+import { DEFAULT_CARD_COLOR } from '../utils/color';
+import { formatCardNumber } from '../utils/format';
+import { StarIcon, ShareIcon, BackArrowIcon } from '../components/icons';
 
 export function ViewCard({ id, showToast }) {
   const [card, setCard] = useState(null);
@@ -11,35 +17,72 @@ export function ViewCard({ id, showToast }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    getCard(id).then(c => {
-      setCard(c);
-      setLoading(false);
-    });
+    // Without the catch a rejected read would leave the page stuck on
+    // "Caricamento..." forever instead of reporting the problem.
+    getCard(id)
+      .then(setCard)
+      .catch(() => setCard(null))
+      .finally(() => setLoading(false));
   }, [id]);
 
+  // Keeps the screen awake while the barcode is on display at a till.
   useEffect(() => {
-    let wakeLock = null;
+    // A Set, not a single ref: the browser can release a lock on its own, and
+    // two visibility changes can overlap. Anything still held gets released on
+    // the way out, so none can be orphaned.
+    const locks = new Set();
+    let inFlight = false;
+    let cancelled = false;
+
+    const drop = (lock) => {
+      locks.delete(lock);
+      lock.release().catch(() => {});
+    };
+
     async function requestWakeLock() {
-      if ('wakeLock' in navigator) {
-        try { wakeLock = await navigator.wakeLock.request('screen'); } catch {}
+      // Without this guard a second visibilitychange arriving while the first
+      // request is still pending would acquire a second lock and orphan one.
+      if (!('wakeLock' in navigator) || cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        for (const lock of locks) drop(lock);
+        const lock = await navigator.wakeLock.request('screen');
+        if (cancelled) {
+          lock.release().catch(() => {});
+        } else {
+          locks.add(lock);
+          // The browser drops the lock by itself when the page is hidden.
+          lock.addEventListener?.('release', () => locks.delete(lock));
+        }
+      } catch {
+        // No lock this time; the next foreground visit tries again.
+      } finally {
+        inFlight = false;
       }
     }
+
     requestWakeLock();
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') requestWakeLock();
     };
     document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
-      if (wakeLock) wakeLock.release();
+      cancelled = true;
+      for (const lock of locks) lock.release().catch(() => {});
+      locks.clear();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 
+  const handleToggleFavorite = async () => {
+    const updated = await toggleFavorite(id);
+    setCard(updated);
+    showToast(updated.favorite ? 'Aggiunta ai preferiti' : 'Rimossa dai preferiti');
+  };
+
   const handleDelete = async () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
+    setConfirmDelete(false);
     await deleteCard(id);
     showToast('Carta eliminata');
     route('/fidelity-card-app/');
@@ -47,26 +90,74 @@ export function ViewCard({ id, showToast }) {
 
   if (loading) {
     return (
-      <div class="page" style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-secondary)' }}>
-        Caricamento...
+      <div class="page">
+        <PageMessage>Caricamento...</PageMessage>
       </div>
     );
   }
 
   if (!card) {
     return (
-      <div class="page" style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-secondary)' }}>
-        Carta non trovata
+      <div class="page">
+        <PageMessage
+          title="Carta non trovata"
+          action={
+            <button class="btn btn-primary" onClick={() => route('/fidelity-card-app/')}>
+              Vai alle mie carte
+            </button>
+          }
+        >
+          La carta che stai cercando non esiste più.
+        </PageMessage>
       </div>
     );
   }
 
+  if (card._unreadable) {
+    return (
+      <div class="page">
+        <PageMessage
+          title="Carta non leggibile"
+          action={
+            <button class="btn btn-primary" onClick={() => route('/fidelity-card-app/')}>
+              Vai alle mie carte
+            </button>
+          }
+        >
+          I dati di questa carta non possono essere decifrati. Le altre carte non sono interessate.
+        </PageMessage>
+      </div>
+    );
+  }
+
+  const cardColor = card.color || DEFAULT_CARD_COLOR;
+
   return (
     <div class="page">
-      <div class="view-card-header" style={{ background: card.color }}>
-        <h2 class="view-card-name">{card.providerName}</h2>
-        <p class="view-card-number">{card.cardNumber}</p>
-      </div>
+      <button class="view-back" onClick={() => route('/fidelity-card-app/')} aria-label="Torna alle mie carte">
+        <BackArrowIcon size={20} />
+        Le mie carte
+      </button>
+
+      <CardBanner
+        color={cardColor}
+        name={card.providerName}
+        number={formatCardNumber(card.cardNumber)}
+        action={
+          <button
+            class="card-banner-fav"
+            onClick={handleToggleFavorite}
+            aria-label={card.favorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
+            aria-pressed={Boolean(card.favorite)}
+          >
+            <StarIcon
+              size={22}
+              fill={card.favorite ? 'currentColor' : 'none'}
+              opacity={card.favorite ? 1 : 0.6}
+            />
+          </button>
+        }
+      />
 
       <div style={{ marginTop: '16px' }}>
         <BarcodeDisplay value={card.cardNumber} format={card.barcodeFormat} />
@@ -74,28 +165,21 @@ export function ViewCard({ id, showToast }) {
 
       {card.notes && (
         <div class="view-card-notes">
-          <span class="view-card-notes-label">Note</span>
+          <span class="label-caps view-card-notes-label">Note</span>
           <p>{card.notes}</p>
         </div>
       )}
 
       <div class="view-card-actions">
         <button class="btn btn-primary" onClick={() => setShowShare(true)} style={{ flex: 1 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-          </svg>
+          <ShareIcon size={18} />
           Condividi
         </button>
         <button class="btn btn-outline" onClick={() => route(`/fidelity-card-app/edit/${card.id}`)} style={{ flex: 1 }}>
           Modifica
         </button>
-        <button
-          class={`btn ${confirmDelete ? 'btn-danger' : 'btn-outline'}`}
-          onClick={handleDelete}
-          onBlur={() => setConfirmDelete(false)}
-        >
-          {confirmDelete ? 'Conferma' : 'Elimina'}
+        <button class="btn btn-outline btn-delete" onClick={() => setConfirmDelete(true)}>
+          Elimina
         </button>
       </div>
 
@@ -103,45 +187,56 @@ export function ViewCard({ id, showToast }) {
         <ShareModal card={card} onClose={() => setShowShare(false)} showToast={showToast} />
       )}
 
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Eliminare questa carta?"
+          message={`"${card.providerName}" verrà rimossa definitivamente da questo dispositivo. L'operazione non può essere annullata.`}
+          confirmLabel="Elimina"
+          danger
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+
       <style>{`
-        .view-card-header {
-          border-radius: var(--radius);
-          padding: 24px;
-          color: #FFFFFF;
-          text-align: center;
-        }
-        .view-card-name {
-          font-size: 22px;
-          font-weight: 700;
-        }
-        .view-card-number {
-          font-size: 14px;
-          opacity: 0.9;
-          margin-top: 4px;
-          font-family: 'SF Mono', 'Menlo', monospace;
-        }
-        .view-card-notes {
-          margin-top: 16px;
-          padding: 16px;
-          background: var(--color-surface);
-          border-radius: var(--radius-sm);
-        }
-        .view-card-notes-label {
-          font-size: 12px;
+        .view-back {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-1);
+          margin-bottom: var(--space-3);
+          margin-left: -4px;
+          padding: var(--space-2) var(--space-2) var(--space-2) 0;
+          font-size: var(--text-sm);
           font-weight: 600;
           color: var(--color-text-secondary);
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .view-back:active {
+          opacity: 0.6;
+        }
+        .view-card-notes {
+          margin-top: var(--space-4);
+          padding: var(--space-4);
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius);
+        }
+        .view-card-notes-label {
+          font-size: var(--text-xs);
         }
         .view-card-notes p {
-          margin-top: 4px;
-          font-size: 14px;
+          margin-top: var(--space-1);
+          font-size: var(--text-sm);
         }
         .view-card-actions {
           display: flex;
-          gap: 10px;
-          margin-top: 20px;
+          gap: var(--space-2);
+          margin-top: var(--space-5);
           flex-wrap: wrap;
+        }
+        .btn-delete {
+          color: var(--color-danger);
+          border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
         }
       `}</style>
     </div>

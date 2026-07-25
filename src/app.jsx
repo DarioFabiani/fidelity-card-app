@@ -1,7 +1,10 @@
 import Router from 'preact-router';
-import { useState, useCallback } from 'preact/hooks';
+import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Header } from './components/Header';
 import { Toast } from './components/Toast';
+import { UnlockScreen } from './components/UnlockScreen';
+import { VaultRecovery } from './components/VaultRecovery';
+import { isEncryptionEnabled, hasEncryptionKey, repairEncryptionState, ENC_ENABLED_KEY } from './db';
 import { Home } from './pages/Home';
 import { AddCard } from './pages/AddCard';
 import { EditCard } from './pages/EditCard';
@@ -11,6 +14,45 @@ import { Settings } from './pages/Settings';
 
 export function App() {
   const [toast, setToast] = useState(null);
+  const [unlocked, setUnlocked] = useState(() => !isEncryptionEnabled() || hasEncryptionKey());
+  const [vaultError, setVaultError] = useState('');
+  // Gate the router until the vault state is known. Rendering optimistically
+  // let pages mount and read the db during the check — briefly enough that no
+  // ciphertext ever reached the UI, but long enough for an export started in
+  // that window to silently produce an empty backup.
+  const [checked, setChecked] = useState(false);
+  // Reached from the unlock screen: a forgotten password otherwise left the
+  // app with no way forward at all.
+  const [showRecovery, setShowRecovery] = useState(false);
+
+  // An interrupted setup can leave sealed cards with the flag off. Detect that
+  // before rendering anything, so we ask to unlock instead of showing rows of
+  // undefined fields.
+  useEffect(() => {
+    if (hasEncryptionKey()) {
+      setChecked(true);
+      return;
+    }
+    repairEncryptionState()
+      .then(active => { if (active) setUnlocked(false); })
+      .catch(err => setVaultError(err.message))
+      .finally(() => setChecked(true));
+  }, []);
+
+  // localStorage fires `storage` in the OTHER tabs. Without this, a tab left
+  // open on the list while encryption was switched on elsewhere would keep
+  // reading from a vault it no longer has the key for, and report the cards
+  // as "non trovata" — which reads as data loss.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== ENC_ENABLED_KEY) return;
+      if (e.newValue === 'true' && !hasEncryptionKey()) {
+        setUnlocked(false);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
@@ -19,6 +61,25 @@ export function App() {
   const hideToast = useCallback(() => {
     setToast(null);
   }, []);
+
+  if (vaultError || showRecovery) {
+    return (
+      <VaultRecovery
+        message={vaultError || 'Senza la password i dati cifrati non possono essere letti. Puoi salvarne una copia così come sono, oppure ripartire da zero.'}
+        // Only offered when the user chose to come here: a real vault error
+        // has nothing to go back to.
+        onCancel={vaultError ? undefined : () => setShowRecovery(false)}
+      />
+    );
+  }
+
+  if (!checked) {
+    return null;
+  }
+
+  if (!unlocked) {
+    return <UnlockScreen onUnlock={() => setUnlocked(true)} onRecover={() => setShowRecovery(true)} />;
+  }
 
   return (
     <>

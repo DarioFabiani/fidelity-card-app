@@ -1,36 +1,66 @@
 :root {
-  --color-primary: #1565C0;
-  --color-primary-dark: #0D47A1;
-  --color-primary-light: #42A5F5;
-  --color-accent: #FF6F00;
-  --color-bg: #F5F5F5;
+  /* Muted, low-saturation palette: colour carries meaning without shouting. */
+  --color-primary: #3D6A99;
+  /* Text/icon colour that sits on top of --color-primary. Flips in dark mode,
+     where the primary is light and white would only reach ~2.6:1. */
+  --color-on-primary: #FFFFFF;
+  --color-primary-light: #7BA3C7;
+  --color-accent: #B57A45;
+  --color-bg: #F4F4F2;
   --color-surface: #FFFFFF;
-  --color-text: #212121;
-  --color-text-secondary: #757575;
-  --color-border: #E0E0E0;
-  --color-danger: #D32F2F;
-  --color-success: #388E3C;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
-  --shadow-md: 0 2px 8px rgba(0,0,0,0.15);
-  --shadow-lg: 0 4px 16px rgba(0,0,0,0.2);
-  --radius: 12px;
-  --radius-sm: 8px;
+  --color-text: #23262B;
+  --color-text-secondary: #646973;
+  --color-border: #E2E2DF;
+  --color-danger: #A34F47;
+  --color-on-danger: #FFFFFF;
+  --color-success: #4C7757;
+  --color-header-from: #446F9B;
+  --color-header-to: #2C4F75;
+  --shadow-sm: 0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.10);
+  --shadow-md: 0 4px 8px -2px rgba(16,24,40,0.10), 0 2px 4px -2px rgba(16,24,40,0.06);
+  --shadow-lg: 0 12px 20px -4px rgba(16,24,40,0.12), 0 4px 8px -4px rgba(16,24,40,0.08);
+  --radius-lg: 18px;
+  --radius: 14px;
+  --radius-sm: 10px;
   --header-height: 56px;
+
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 26px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  --font-mono: ui-monospace, 'SF Mono', 'Menlo', 'Roboto Mono', monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-primary: #42A5F5;
-    --color-primary-dark: #1565C0;
-    --color-primary-light: #90CAF9;
-    --color-bg: #121212;
-    --color-surface: #1E1E1E;
-    --color-text: #E0E0E0;
-    --color-text-secondary: #9E9E9E;
-    --color-border: #333333;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-    --shadow-md: 0 2px 8px rgba(0,0,0,0.4);
-    --shadow-lg: 0 4px 16px rgba(0,0,0,0.5);
+    --color-primary: #7BA3C7;
+    --color-on-primary: #15161A;
+    --color-primary-light: #A6C3DC;
+    --color-accent: #C79A6B;
+    --color-bg: #15161A;
+    --color-surface: #1E2026;
+    --color-text: #E3E4E6;
+    --color-text-secondary: #989CA5;
+    --color-border: #32353D;
+    --color-danger: #C4736B;
+    --color-on-danger: #15161A;
+    --color-success: #74A382;
+    /* Keeps white header text legible: the light-mode blues are too bright on dark. */
+    --color-header-from: #26384D;
+    --color-header-to: #1A2635;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.35);
+    --shadow-md: 0 4px 10px rgba(0,0,0,0.45);
+    --shadow-lg: 0 12px 24px rgba(0,0,0,0.55);
   }
 }
 
@@ -87,17 +117,25 @@ input, textarea, select {
   padding: 12px;
   width: 100%;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 input:focus, textarea:focus, select:focus {
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+/* Inputs style their own focus ring above, so only other controls need this. */
+:focus-visible:not(input):not(textarea):not(select) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .page {
   flex: 1;
-  padding: 16px;
-  padding-top: calc(var(--header-height) + 16px);
+  padding: var(--space-4);
+  padding-top: calc(var(--header-height) + env(safe-area-inset-top) + var(--space-4));
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
   max-width: 600px;
   margin: 0 auto;
   width: 100%;
@@ -107,12 +145,13 @@ input:focus, textarea:focus, select:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
+  min-height: 44px;
   padding: 12px 24px;
   border-radius: var(--radius-sm);
   font-weight: 600;
-  font-size: 14px;
-  transition: opacity 0.2s, transform 0.1s;
+  font-size: var(--text-sm);
+  transition: opacity 0.2s, transform 0.1s, background 0.2s;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -122,7 +161,7 @@ input:focus, textarea:focus, select:focus {
 
 .btn-primary {
   background: var(--color-primary);
-  color: #FFFFFF;
+  color: var(--color-on-primary);
 }
 
 .btn-primary:hover {
@@ -131,7 +170,7 @@ input:focus, textarea:focus, select:focus {
 
 .btn-danger {
   background: var(--color-danger);
-  color: #FFFFFF;
+  color: var(--color-on-danger);
 }
 
 .btn-outline {
@@ -155,30 +194,40 @@ input:focus, textarea:focus, select:focus {
 
 .fab {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: calc(var(--space-6) + env(safe-area-inset-bottom) + var(--fab-offset, 0px));
+  right: var(--space-6);
   width: 56px;
   height: 56px;
   border-radius: 50%;
   background: var(--color-primary);
-  color: #FFFFFF;
-  box-shadow: var(--shadow-lg);
+  color: var(--color-on-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 28px;
   z-index: 100;
-  transition: transform 0.2s;
+  transition: transform 0.2s, bottom 0.25s ease;
+  /* Stays opaque for affordance, but picks up the same specular rim. */
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #FFFFFF 40%, transparent),
+    var(--shadow-lg);
 }
 
 .fab:active {
   transform: scale(0.92);
 }
 
+/* Lifts the FAB above the install banner so the two never overlap. */
+body.has-install-banner {
+  --fab-offset: 68px;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.32);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -187,14 +236,44 @@ input:focus, textarea:focus, select:focus {
 }
 
 .modal-content {
-  background: var(--color-surface);
-  border-radius: var(--radius) var(--radius) 0 0;
-  padding: 24px;
+  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #FFFFFF 55%, transparent);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: var(--space-6);
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
   width: 100%;
   max-width: 600px;
   max-height: 80vh;
   overflow-y: auto;
   animation: slideUp 0.3s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .modal-content {
+    background: color-mix(in srgb, var(--color-surface) 78%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, #FFFFFF 14%, transparent);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .modal-overlay {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(0,0,0,0.5);
+  }
+  .modal-content {
+    background: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .modal-content {
+    background: var(--color-surface);
+  }
 }
 
 @keyframes fadeIn {
@@ -207,14 +286,98 @@ input:focus, textarea:focus, select:focus {
   to { transform: translateY(0); }
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
+/* Shared recipe for the small uppercase labels used above form fields,
+   settings sections, card notes and the share code. Font-size and margins
+   differ per call site (12-13px, no clean shared token) and stay local. */
+.label-caps {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Card rows. These live here rather than in the component because CardItem
+   renders once per card: an inline <style> would be duplicated in the DOM
+   for every row in the list. */
+.card-item-wrap {
+  position: relative;
+}
+.card-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-5);
+  padding-right: 60px;
+  min-height: 88px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  text-align: left;
   overflow: hidden;
-  clip: rect(0,0,0,0);
+  isolation: isolate;
+}
+/* Soft sheen across the card face, keeps flat brand colours from looking dull. */
+.card-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 80% at 100% 0%, rgba(255,255,255,0.18), transparent 60%);
+  pointer-events: none;
+  z-index: -1;
+}
+.card-item:active {
+  transform: scale(0.985);
+  box-shadow: var(--shadow-sm);
+}
+.card-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.card-provider {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  border: 0;
+}
+.card-number {
+  font-size: var(--text-sm);
+  opacity: 0.88;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.card-fav {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease;
+}
+.card-fav:active {
+  transform: translateY(-50%) scale(0.85);
+}
+
+/* A card whose blob could not be decrypted: muted and flat, so it never reads
+   as a usable card, but still visible so the record isn't silently lost. */
+.card-item-unreadable {
+  background: var(--color-surface) !important;
+  border: 1px dashed var(--color-border);
+  box-shadow: none;
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+.card-item-unreadable .card-provider {
+  font-size: var(--text-base);
 }

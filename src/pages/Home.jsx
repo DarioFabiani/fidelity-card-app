@@ -1,33 +1,49 @@
 import { route } from 'preact-router';
+import { useState } from 'preact/hooks';
 import { useCards } from '../hooks/useCards';
 import { useSearch } from '../hooks/useSearch';
+import { useSortedCards } from '../hooks/useSortedCards';
 import { SearchBar } from '../components/SearchBar';
+import { SortToggle } from '../components/SortToggle';
 import { CardList } from '../components/CardList';
 import { EmptyState } from '../components/EmptyState';
 import { InstallPrompt } from '../components/InstallPrompt';
+import { PageMessage } from '../components/PageMessage';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { PlusIcon } from '../components/icons';
 
 export function Home() {
-  const { cards, loading } = useCards();
+  const [confirmRemoveId, setConfirmRemoveId] = useState(null);
+  const { cards, loading, error, toggleFav, remove } = useCards();
   const { query, setQuery, filtered } = useSearch(cards);
+  const { mode, setMode, sections } = useSortedCards(filtered);
 
   return (
     <div class="page">
       {cards.length > 0 && (
-        <SearchBar value={query} onInput={setQuery} />
+        <>
+          <SearchBar value={query} onInput={setQuery} />
+          <div class="home-toolbar">
+            <span class="home-count">
+              {cards.length} {cards.length === 1 ? 'carta' : 'carte'}
+            </span>
+            <SortToggle mode={mode} onChange={setMode} />
+          </div>
+        </>
       )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-secondary)' }}>
-          Caricamento...
-        </div>
+        <PageMessage>Caricamento...</PageMessage>
+      ) : error ? (
+        <PageMessage title="Impossibile leggere le carte">{error}</PageMessage>
       ) : cards.length === 0 ? (
-        <EmptyState />
+        <EmptyState onAdd={() => route('/fidelity-card-app/add')} />
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--color-text-secondary)', fontSize: '14px' }}>
-          Nessun risultato per "{query}"
-        </div>
+        <PageMessage title="Nessun risultato">
+          Nessuna carta corrisponde a "{query}".
+        </PageMessage>
       ) : (
-        <CardList cards={filtered} />
+        <CardList sections={sections} onToggleFavorite={toggleFav} onDelete={setConfirmRemoveId} />
       )}
 
       <button
@@ -35,10 +51,35 @@ export function Home() {
         onClick={() => route('/fidelity-card-app/add')}
         aria-label="Aggiungi carta"
       >
-        +
+        <PlusIcon size={26} />
       </button>
 
+      {confirmRemoveId && (
+        <ConfirmDialog
+          title="Rimuovere la carta non leggibile?"
+          message="Il record verrà eliminato definitivamente. I suoi dati non sono comunque recuperabili senza la password con cui erano stati cifrati."
+          confirmLabel="Rimuovi"
+          danger
+          onConfirm={() => { remove(confirmRemoveId); setConfirmRemoveId(null); }}
+          onCancel={() => setConfirmRemoveId(null)}
+        />
+      )}
+
       <InstallPrompt />
+
+      <style>{`
+        .home-toolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: var(--space-3);
+          margin-bottom: var(--space-4);
+        }
+        .home-count {
+          font-size: var(--text-sm);
+          color: var(--color-text-secondary);
+        }
+      `}</style>
     </div>
   );
 }

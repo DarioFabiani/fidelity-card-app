@@ -8,7 +8,9 @@ const ZXING_TO_APP_FORMAT = {
   [BarcodeFormat.EAN_13]: 'EAN13',
   [BarcodeFormat.EAN_8]: 'EAN8',
   [BarcodeFormat.UPC_A]: 'UPC',
-  [BarcodeFormat.ITF]: 'ITF14'
+  [BarcodeFormat.ITF]: 'ITF14',
+  [BarcodeFormat.QR_CODE]: 'QR_CODE',
+  [BarcodeFormat.CODABAR]: 'CODABAR'
 };
 
 export function BarcodeScanner({ onDetected, onClose }) {

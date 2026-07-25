@@ -1,6 +1,7 @@
 import { route } from 'preact-router';
 import { useCards } from '../hooks/useCards';
 import { CardForm } from '../components/CardForm';
+import { PageHeader } from '../components/PageHeader';
 
 export function AddCard({ showToast }) {
   const { add } = useCards();
@@ -13,9 +14,7 @@ export function AddCard({ showToast }) {
 
   return (
     <div class="page">
-      <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '20px' }}>
-        Aggiungi Carta
-      </h2>
+      <PageHeader title="Aggiungi carta" onBack={() => route('/fidelity-card-app/')} />
       <CardForm onSubmit={handleSubmit} submitLabel="Aggiungi" />
     </div>
   );
