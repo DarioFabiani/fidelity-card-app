@@ -6,7 +6,8 @@ const DB_NAME = 'fidelity-cards-db';
 const DB_VERSION = 1;
 const STORE_NAME = 'cards';
 
-const ENC_ENABLED_KEY = 'fidelity-encryption-enabled';
+// Exported so other tabs can watch it via the `storage` event.
+export const ENC_ENABLED_KEY = 'fidelity-encryption-enabled';
 const ENC_SALT_KEY = 'fidelity-encryption-salt';
 // A known constant sealed with the master key at setup time. Decrypting it is
 // what proves a password is right, so verification no longer depends on there

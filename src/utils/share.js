@@ -144,16 +144,40 @@ export async function decodeSharedCard(dataParam, code) {
   }
 }
 
+// Sizes the encoder always produces, used to tell a truncated link from a
+// wrong code: 16-byte salt, then at least a 12-byte IV plus the 16-byte
+// GCM tag before any payload.
+const SALT_B64_LENGTH = 24;   // 16 bytes in base64, including padding
+const MIN_SEALED_BYTES = 12 + 16;
+
 /**
- * Checks whether a data param has the minimal shape produced by
- * encodeCardForShare (salt + '.' + ciphertext), without needing the code.
- * Used to distinguish a structurally broken/missing link ("Link non
- * valido") from a valid link whose code just hasn't been entered yet.
+ * Checks whether a data param has the shape produced by encodeCardForShare
+ * (salt + '.' + ciphertext), without needing the code.
+ *
+ * Deliberately stricter than "there is a dot in it": a link cut short by a
+ * chat client still contains the separator, and reporting that as a wrong
+ * code sends the recipient off re-typing a code that was right all along.
  */
 export function isValidShareData(dataParam) {
   if (typeof dataParam !== 'string' || !dataParam) return false;
   const separatorIndex = dataParam.indexOf('.');
-  return separatorIndex > 0 && separatorIndex < dataParam.length - 1;
+  if (separatorIndex <= 0 || separatorIndex === dataParam.length - 1) return false;
+
+  const salt = dataParam.slice(0, separatorIndex);
+  const sealed = dataParam.slice(separatorIndex + 1);
+  if (salt.length !== SALT_B64_LENGTH) return false;
+
+  // base64 carries 3 bytes per 4 characters; anything shorter than IV+tag
+  // cannot be a complete sealed payload.
+  if (Math.floor(sealed.length / 4) * 3 < MIN_SEALED_BYTES) return false;
+
+  try {
+    base64ToBuffer(fromBase64Url(salt));
+    base64ToBuffer(fromBase64Url(sealed));
+  } catch {
+    return false;
+  }
+  return true;
 }
 
 export async function shareCard(card, shareData) {

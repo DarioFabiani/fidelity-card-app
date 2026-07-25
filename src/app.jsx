@@ -4,7 +4,7 @@ import { Header } from './components/Header';
 import { Toast } from './components/Toast';
 import { UnlockScreen } from './components/UnlockScreen';
 import { VaultRecovery } from './components/VaultRecovery';
-import { isEncryptionEnabled, hasEncryptionKey, repairEncryptionState } from './db';
+import { isEncryptionEnabled, hasEncryptionKey, repairEncryptionState, ENC_ENABLED_KEY } from './db';
 import { Home } from './pages/Home';
 import { AddCard } from './pages/AddCard';
 import { EditCard } from './pages/EditCard';
@@ -39,6 +39,21 @@ export function App() {
       .finally(() => setChecked(true));
   }, []);
 
+  // localStorage fires `storage` in the OTHER tabs. Without this, a tab left
+  // open on the list while encryption was switched on elsewhere would keep
+  // reading from a vault it no longer has the key for, and report the cards
+  // as "non trovata" — which reads as data loss.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== ENC_ENABLED_KEY) return;
+      if (e.newValue === 'true' && !hasEncryptionKey()) {
+        setUnlocked(false);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
   }, []);
@@ -51,6 +66,9 @@ export function App() {
     return (
       <VaultRecovery
         message={vaultError || 'Senza la password i dati cifrati non possono essere letti. Puoi salvarne una copia così come sono, oppure ripartire da zero.'}
+        // Only offered when the user chose to come here: a real vault error
+        // has nothing to go back to.
+        onCancel={vaultError ? undefined : () => setShowRecovery(false)}
       />
     );
   }

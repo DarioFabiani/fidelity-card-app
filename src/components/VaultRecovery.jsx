@@ -11,7 +11,7 @@ import { ConfirmDialog } from './ConfirmDialog';
  * the user always has a copy in hand before being offered the destructive way
  * out.
  */
-export function VaultRecovery({ message }) {
+export function VaultRecovery({ message, onCancel }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dumped, setDumped] = useState(false);
@@ -67,6 +67,12 @@ export function VaultRecovery({ message }) {
         )}
       </div>
 
+      {onCancel && (
+        <button class="btn btn-outline btn-block vault-recovery-back" onClick={onCancel} disabled={busy}>
+          Torna allo sblocco
+        </button>
+      )}
+
       {confirmReset && (
         <ConfirmDialog
           title="Ripristinare l'app?"
@@ -103,6 +109,9 @@ export function VaultRecovery({ message }) {
           color: var(--color-text-secondary);
           line-height: 1.5;
           margin-bottom: var(--space-4);
+        }
+        .vault-recovery-back {
+          margin-top: var(--space-5);
         }
         .vault-recovery-reset {
           color: var(--color-danger);
