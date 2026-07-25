@@ -1,7 +1,6 @@
 :root {
   /* Muted, low-saturation palette: colour carries meaning without shouting. */
   --color-primary: #3D6A99;
-  --color-primary-dark: #2C4F75;
   /* Text/icon colour that sits on top of --color-primary. Flips in dark mode,
      where the primary is light and white would only reach ~2.6:1. */
   --color-on-primary: #FFFFFF;
@@ -45,7 +44,6 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --color-primary: #7BA3C7;
-    --color-primary-dark: #3D6A99;
     --color-on-primary: #15161A;
     --color-primary-light: #A6C3DC;
     --color-accent: #C79A6B;
@@ -288,57 +286,14 @@ body.has-install-banner {
   to { transform: translateY(0); }
 }
 
-/*
- * Translucent material for surfaces that float above scrolling content
- * (header, sheets, banners). Deliberately NOT used on cards or the barcode:
- * those need flat, opaque colour to stay legible and scannable at a till.
- */
-.glass {
-  background: color-mix(in srgb, var(--color-surface) 68%, transparent);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  backdrop-filter: blur(22px) saturate(180%);
-  /* Specular edge: light catches the top rim, fades toward the bottom. */
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #FFFFFF 55%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, #FFFFFF 10%, transparent),
-    var(--shadow-lg);
-}
-
-@media (prefers-color-scheme: dark) {
-  .glass {
-    background: color-mix(in srgb, var(--color-surface) 62%, transparent);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, #FFFFFF 14%, transparent),
-      var(--shadow-lg);
-  }
-}
-
-/* Honours the OS "reduce transparency" switch — and covers browsers without
-   backdrop-filter, which would otherwise show a washed-out see-through panel. */
-@media (prefers-reduced-transparency: reduce) {
-  .glass {
-    background: var(--color-surface);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-}
-
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass {
-    background: var(--color-surface);
-  }
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0,0,0,0);
-  white-space: nowrap;
-  border: 0;
+/* Shared recipe for the small uppercase labels used above form fields,
+   settings sections, card notes and the share code. Font-size and margins
+   differ per call site (12-13px, no clean shared token) and stay local. */
+.label-caps {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Card rows. These live here rather than in the component because CardItem

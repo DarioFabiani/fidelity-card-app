@@ -1,4 +1,4 @@
-import { useState, useRef } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { PROVIDERS } from '../constants/providers';
 import { BARCODE_FORMATS, suggestFormat } from '../constants/barcodeFormats';
 import { CARD_COLORS, DEFAULT_CARD_COLOR } from '../utils/color';
@@ -14,7 +14,6 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [ScannerComponent, setScannerComponent] = useState(null);
   const [scannerError, setScannerError] = useState('');
-  const formRef = useRef(null);
 
   const handleScanned = (text, format) => {
     setCardNumber(text);
@@ -83,9 +82,9 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   };
 
   return (
-    <form ref={formRef} class="card-form" onSubmit={handleSubmit}>
+    <form class="card-form" onSubmit={handleSubmit}>
       <div class="form-group">
-        <label class="form-label">Nome negozio *</label>
+        <label class="label-caps form-label">Nome negozio *</label>
         <input
           type="text"
           value={providerName}
@@ -110,7 +109,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Numero carta *</label>
+        <label class="label-caps form-label">Numero carta *</label>
         <div class="card-number-row">
           <input
             type="text"
@@ -145,7 +144,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
       )}
 
       <div class="form-group">
-        <label class="form-label">Formato codice a barre</label>
+        <label class="label-caps form-label">Formato codice a barre</label>
         <select value={barcodeFormat} onChange={e => setBarcodeFormat(e.target.value)}>
           {BARCODE_FORMATS.map(f => (
             <option key={f.value} value={f.value}>
@@ -156,7 +155,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Colore carta</label>
+        <label class="label-caps form-label">Colore carta</label>
         <div class="color-swatches">
           {CARD_COLORS.map(c => (
             <button
@@ -180,7 +179,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Note</label>
+        <label class="label-caps form-label">Note</label>
         <textarea
           value={notes}
           onInput={e => setNotes(e.target.value)}
@@ -207,10 +206,6 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
         }
         .form-label {
           font-size: 13px;
-          font-weight: 600;
-          color: var(--color-text-secondary);
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
         }
         .card-number-row {
           display: flex;
@@ -258,7 +253,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
           display: flex;
           align-items: center;
           gap: 10px;
-          font-size: 15px;
+          font-size: var(--text-base);
         }
         .suggestions button:hover {
           background: var(--color-bg);

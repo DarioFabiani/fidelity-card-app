@@ -87,6 +87,14 @@ export function InstallPrompt() {
             0 -2px 12px rgba(0,0,0,0.1);
           animation: slideUp 0.3s ease;
         }
+        /* Without backdrop-filter the translucent background never gets
+           blurred, leaving the page showing through the banner. The header and
+           the sheets already guard for this; this one was missing it. */
+        @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+          .install-banner {
+            background: var(--color-surface);
+          }
+        }
         @media (prefers-reduced-transparency: reduce) {
           .install-banner {
             background: var(--color-surface);

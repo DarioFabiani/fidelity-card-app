@@ -5,6 +5,7 @@ import { isEncryptionEnabled, enableEncryption, disableEncryption } from '../db'
 import { PageHeader } from '../components/PageHeader';
 import { PasswordPrompt } from '../components/PasswordPrompt';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { LockIcon } from '../components/icons';
 
 function importSummary({ added, updated }) {
   const parts = [];
@@ -80,7 +81,7 @@ export function Settings({ showToast }) {
       <PageHeader title="Impostazioni" onBack={() => route('/fidelity-card-app/')} />
 
       <div class="settings-section">
-        <h3 class="settings-section-title">Dati</h3>
+        <h3 class="label-caps settings-section-title">Dati</h3>
 
         <button class="settings-item" onClick={handleExport} disabled={exporting}>
           <div class="settings-item-content">
@@ -108,7 +109,7 @@ export function Settings({ showToast }) {
       </div>
 
       <div class="settings-section">
-        <h3 class="settings-section-title">Sicurezza</h3>
+        <h3 class="label-caps settings-section-title">Sicurezza</h3>
 
         {encryptionEnabled ? (
           <button class="settings-item" onClick={() => setConfirmDisable(true)}>
@@ -127,16 +128,13 @@ export function Settings({ showToast }) {
               <span class="settings-item-label">Attiva cifratura</span>
               <span class="settings-item-desc">Proteggi le carte con una password (AES-256-GCM)</span>
             </div>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
+            <LockIcon size={20} />
           </button>
         )}
       </div>
 
       <div class="settings-section">
-        <h3 class="settings-section-title">Info</h3>
+        <h3 class="label-caps settings-section-title">Info</h3>
         <div class="settings-about">
           <p><strong>Carte Fedeltà</strong> v1.0.0</p>
           <p>Gestisci le tue carte fedeltà dal telefono.</p>
@@ -219,10 +217,6 @@ export function Settings({ showToast }) {
         }
         .settings-section-title {
           font-size: 13px;
-          font-weight: 600;
-          color: var(--color-text-secondary);
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
           margin-bottom: 8px;
         }
         .settings-item {
@@ -247,7 +241,7 @@ export function Settings({ showToast }) {
           gap: 2px;
         }
         .settings-item-label {
-          font-size: 15px;
+          font-size: var(--text-base);
           font-weight: 600;
         }
         .settings-item-desc {

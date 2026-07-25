@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'preact/hooks';
-import { getAllCards, addCard, updateCard, deleteCard, toggleFavorite } from '../db';
+import { getAllCards, addCard, deleteCard, toggleFavorite } from '../db';
 
 export function useCards() {
   const [cards, setCards] = useState([]);
@@ -28,12 +28,6 @@ export function useCards() {
     return newCard;
   }, []);
 
-  const update = useCallback(async (card) => {
-    const updated = await updateCard(card);
-    setCards(prev => prev.map(c => c.id === updated.id ? updated : c));
-    return updated;
-  }, []);
-
   const remove = useCallback(async (id) => {
     await deleteCard(id);
     setCards(prev => prev.filter(c => c.id !== id));
@@ -45,5 +39,5 @@ export function useCards() {
     return updated;
   }, []);
 
-  return { cards, loading, error, reload: load, add, update, remove, toggleFav };
+  return { cards, loading, error, add, remove, toggleFav };
 }

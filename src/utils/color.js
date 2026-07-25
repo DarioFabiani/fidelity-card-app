@@ -6,7 +6,7 @@ export function getContrastColor(hex) {
   return luminance > 0.5 ? '#000000' : '#FFFFFF';
 }
 
-export function shadeColor(hex, amount) {
+function shadeColor(hex, amount) {
   const clamp = v => Math.max(0, Math.min(255, Math.round(v)));
   const r = clamp(parseInt(hex.slice(1, 3), 16) + amount);
   const g = clamp(parseInt(hex.slice(3, 5), 16) + amount);

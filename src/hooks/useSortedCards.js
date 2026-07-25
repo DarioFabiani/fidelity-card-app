@@ -19,7 +19,7 @@ function readStoredMode() {
  * Section letter for a card: the first letter of the provider name, with
  * accents folded (Tigotà -> T) and anything not A-Z bucketed under "#".
  */
-export function sectionLetter(name) {
+function sectionLetter(name) {
   const first = (name || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '')[0];
   if (!first) return '#';
   const upper = first.toUpperCase();

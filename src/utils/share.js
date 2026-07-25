@@ -53,7 +53,7 @@ export function formatShareCode(code) {
 }
 
 /** Accepts the code however the recipient typed it: spaces, dashes, lowercase. */
-export function normalizeShareCode(input) {
+function normalizeShareCode(input) {
   return (input || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 

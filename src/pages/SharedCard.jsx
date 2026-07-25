@@ -3,8 +3,10 @@ import { useState } from 'preact/hooks';
 import { decodeSharedCard, isValidShareData } from '../utils/share';
 import { addCard } from '../db';
 import { BarcodeDisplay } from '../components/BarcodeDisplay';
+import { CardBanner } from '../components/CardBanner';
 import { PageMessage } from '../components/PageMessage';
-import { getContrastColor, cardGradient, DEFAULT_CARD_COLOR } from '../utils/color';
+import { DEFAULT_CARD_COLOR } from '../utils/color';
+import { formatCardNumber } from '../utils/format';
 
 export function SharedCard({ data, showToast }) {
   const [code, setCode] = useState('');
@@ -15,6 +17,16 @@ export function SharedCard({ data, showToast }) {
   const [saved, setSaved] = useState(false);
 
   const validLink = isValidShareData(data);
+
+  // Shown above both the code-entry step and the unlocked card — but not for
+  // a structurally invalid link, where the framing doesn't apply.
+  const sharedIntro = (
+    <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+      <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)' }}>
+        Qualcuno ha condiviso una carta con te
+      </p>
+    </div>
+  );
 
   const handleUnlock = async (e) => {
     e.preventDefault();
@@ -69,11 +81,7 @@ export function SharedCard({ data, showToast }) {
   if (!card) {
     return (
       <div class="page">
-        <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-          <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)' }}>
-            Qualcuno ha condiviso una carta con te
-          </p>
-        </div>
+        {sharedIntro}
 
         <div class="shared-card-unlock">
           <h2 class="shared-card-unlock-title">Inserisci il codice</h2>
@@ -134,22 +142,13 @@ export function SharedCard({ data, showToast }) {
 
   return (
     <div class="page">
-      <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-        <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)' }}>
-          Qualcuno ha condiviso una carta con te
-        </p>
-      </div>
+      {sharedIntro}
 
-      <div
-        class="shared-card-header"
-        style={{
-          background: cardGradient(card.color || DEFAULT_CARD_COLOR),
-          color: getContrastColor(card.color || DEFAULT_CARD_COLOR)
-        }}
-      >
-        <h2 class="shared-card-name">{card.providerName}</h2>
-        <p class="shared-card-number">{card.cardNumber}</p>
-      </div>
+      <CardBanner
+        color={card.color || DEFAULT_CARD_COLOR}
+        name={card.providerName}
+        number={formatCardNumber(card.cardNumber)}
+      />
 
       <div style={{ marginTop: 'var(--space-4)' }}>
         <BarcodeDisplay value={card.cardNumber} format={card.barcodeFormat} fullscreenable={false} />
@@ -174,24 +173,6 @@ export function SharedCard({ data, showToast }) {
       </div>
 
       <style>{`
-        .shared-card-header {
-          border-radius: var(--radius-lg);
-          padding: var(--space-6);
-          text-align: center;
-          box-shadow: var(--shadow-md);
-        }
-        .shared-card-name {
-          font-size: var(--text-xl);
-          font-weight: 700;
-          letter-spacing: -0.02em;
-        }
-        .shared-card-number {
-          font-size: var(--text-sm);
-          opacity: 0.9;
-          margin-top: var(--space-1);
-          font-family: var(--font-mono);
-          letter-spacing: 0.06em;
-        }
         .shared-card-notes {
           margin-top: var(--space-4);
           padding: var(--space-4);

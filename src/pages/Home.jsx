@@ -8,6 +8,7 @@ import { CardList } from '../components/CardList';
 import { EmptyState } from '../components/EmptyState';
 import { InstallPrompt } from '../components/InstallPrompt';
 import { PageMessage } from '../components/PageMessage';
+import { PlusIcon } from '../components/icons';
 
 export function Home() {
   const { cards, loading, error, toggleFav, remove } = useCards();
@@ -47,10 +48,7 @@ export function Home() {
         onClick={() => route('/fidelity-card-app/add')}
         aria-label="Aggiungi carta"
       >
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
+        <PlusIcon size={26} />
       </button>
 
       <InstallPrompt />

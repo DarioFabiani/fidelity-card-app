@@ -1,12 +1,11 @@
+import { BackArrowIcon } from './icons';
+
 export function PageHeader({ title, onBack }) {
   return (
     <div class="page-header">
       {onBack && (
         <button type="button" class="page-back" onClick={onBack} aria-label="Torna indietro">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12" />
-            <polyline points="12 19 5 12 12 5" />
-          </svg>
+          <BackArrowIcon size={22} />
         </button>
       )}
       <h2 class="page-title">{title}</h2>

@@ -21,7 +21,7 @@ export function generateSalt(length = SALT_LENGTH) {
  * Generates a fresh random IV for a single AES-GCM encryption operation.
  * An IV must never be reused with the same key.
  */
-export function generateIV() {
+function generateIV() {
   return crypto.getRandomValues(new Uint8Array(IV_LENGTH));
 }
 

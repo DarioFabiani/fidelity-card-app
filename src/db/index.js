@@ -20,11 +20,11 @@ const VERIFIER_PLAINTEXT = { v: 1 };
 // means the app must be unlocked again with the password.
 let encryptionKey = null;
 
-export function setEncryptionKey(key) {
+function setEncryptionKey(key) {
   encryptionKey = key;
 }
 
-export function clearEncryptionKey() {
+function clearEncryptionKey() {
   encryptionKey = null;
 }
 

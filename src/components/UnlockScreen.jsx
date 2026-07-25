@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { unlock } from '../db';
+import { LockIcon } from './icons';
 
 export function UnlockScreen({ onUnlock }) {
   const [password, setPassword] = useState('');
@@ -29,10 +30,7 @@ export function UnlockScreen({ onUnlock }) {
     <div class="unlock-screen">
       <div class="unlock-card">
         <div class="unlock-icon">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
+          <LockIcon size={28} />
         </div>
         <h2 class="unlock-title">Dati cifrati</h2>
         <p class="unlock-desc">
@@ -76,7 +74,7 @@ export function UnlockScreen({ onUnlock }) {
           height: 56px;
           border-radius: 50%;
           background: var(--color-primary);
-          color: #FFFFFF;
+          color: var(--color-on-primary);
           display: flex;
           align-items: center;
           justify-content: center;

@@ -2,10 +2,13 @@ import { route } from 'preact-router';
 import { useState, useEffect } from 'preact/hooks';
 import { getCard, deleteCard, toggleFavorite } from '../db';
 import { BarcodeDisplay } from '../components/BarcodeDisplay';
+import { CardBanner } from '../components/CardBanner';
 import { ShareModal } from '../components/ShareModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PageMessage } from '../components/PageMessage';
-import { getContrastColor, cardGradient, DEFAULT_CARD_COLOR } from '../utils/color';
+import { DEFAULT_CARD_COLOR } from '../utils/color';
+import { formatCardNumber } from '../utils/format';
+import { StarIcon, ShareIcon, BackArrowIcon } from '../components/icons';
 
 export function ViewCard({ id, showToast }) {
   const [card, setCard] = useState(null);
@@ -132,35 +135,29 @@ export function ViewCard({ id, showToast }) {
   return (
     <div class="page">
       <button class="view-back" onClick={() => route('/fidelity-card-app/')} aria-label="Torna alle mie carte">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="19" y1="12" x2="5" y2="12" />
-          <polyline points="12 19 5 12 12 5" />
-        </svg>
+        <BackArrowIcon size={20} />
         Le mie carte
       </button>
 
-      <div
-        class="view-card-header"
-        style={{ background: cardGradient(cardColor), color: getContrastColor(cardColor) }}
-      >
-        <button
-          class="view-card-fav"
-          onClick={handleToggleFavorite}
-          aria-label={card.favorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
-          aria-pressed={Boolean(card.favorite)}
-        >
-          <svg
-            width="22" height="22" viewBox="0 0 24 24"
-            fill={card.favorite ? 'currentColor' : 'none'}
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-            style={{ opacity: card.favorite ? 1 : 0.6 }}
+      <CardBanner
+        color={cardColor}
+        name={card.providerName}
+        number={formatCardNumber(card.cardNumber)}
+        action={
+          <button
+            class="card-banner-fav"
+            onClick={handleToggleFavorite}
+            aria-label={card.favorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
+            aria-pressed={Boolean(card.favorite)}
           >
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-          </svg>
-        </button>
-        <h2 class="view-card-name">{card.providerName}</h2>
-        <p class="view-card-number">{card.cardNumber}</p>
-      </div>
+            <StarIcon
+              size={22}
+              fill={card.favorite ? 'currentColor' : 'none'}
+              opacity={card.favorite ? 1 : 0.6}
+            />
+          </button>
+        }
+      />
 
       <div style={{ marginTop: '16px' }}>
         <BarcodeDisplay value={card.cardNumber} format={card.barcodeFormat} />
@@ -168,17 +165,14 @@ export function ViewCard({ id, showToast }) {
 
       {card.notes && (
         <div class="view-card-notes">
-          <span class="view-card-notes-label">Note</span>
+          <span class="label-caps view-card-notes-label">Note</span>
           <p>{card.notes}</p>
         </div>
       )}
 
       <div class="view-card-actions">
         <button class="btn btn-primary" onClick={() => setShowShare(true)} style={{ flex: 1 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-          </svg>
+          <ShareIcon size={18} />
           Condividi
         </button>
         <button class="btn btn-outline" onClick={() => route(`/fidelity-card-app/edit/${card.id}`)} style={{ flex: 1 }}>
@@ -220,42 +214,6 @@ export function ViewCard({ id, showToast }) {
         .view-back:active {
           opacity: 0.6;
         }
-        .view-card-header {
-          position: relative;
-          border-radius: var(--radius-lg);
-          padding: var(--space-6);
-          text-align: center;
-          box-shadow: var(--shadow-md);
-        }
-        .view-card-fav {
-          position: absolute;
-          top: var(--space-2);
-          right: var(--space-2);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 44px;
-          height: 44px;
-          border-radius: 50%;
-          color: inherit;
-          -webkit-tap-highlight-color: transparent;
-          transition: transform 0.12s ease;
-        }
-        .view-card-fav:active {
-          transform: scale(0.85);
-        }
-        .view-card-name {
-          font-size: var(--text-xl);
-          font-weight: 700;
-          letter-spacing: -0.02em;
-        }
-        .view-card-number {
-          font-size: var(--text-sm);
-          opacity: 0.9;
-          margin-top: var(--space-1);
-          font-family: var(--font-mono);
-          letter-spacing: 0.06em;
-        }
         .view-card-notes {
           margin-top: var(--space-4);
           padding: var(--space-4);
@@ -265,10 +223,6 @@ export function ViewCard({ id, showToast }) {
         }
         .view-card-notes-label {
           font-size: var(--text-xs);
-          font-weight: 600;
-          color: var(--color-text-secondary);
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
         }
         .view-card-notes p {
           margin-top: var(--space-1);
