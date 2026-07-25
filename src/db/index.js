@@ -249,19 +249,24 @@ export async function enableEncryption(password) {
   const key = await deriveKey(password, salt);
   const verifier = await encryptJSON(VERIFIER_PLAINTEXT, key);
 
-  setEncryptionKey(key);
-
-  // Order matters. The flag goes down BEFORE any card is sealed, so an
-  // interruption can only ever leave "flag on, some cards still plaintext" —
-  // which reads fine, because decryptCard passes untouched records through.
-  // The reverse order would leave sealed cards with the flag off: the app
-  // would think it is unencrypted, hand ciphertext to the UI, and a second
-  // setup attempt would overwrite it.
-  localStorage.setItem(ENC_SALT_KEY, bufferToBase64(salt));
-  localStorage.setItem(ENC_VERIFIER_KEY, verifier);
-  localStorage.setItem(ENC_ENABLED_KEY, 'true');
-
   try {
+    setEncryptionKey(key);
+
+    // Order matters. The flag goes up BEFORE any card is sealed, so an
+    // interruption can only ever leave "flag on, some cards still plaintext" —
+    // which reads fine, because decryptCard passes untouched records through.
+    // The reverse order would leave sealed cards with the flag off: the app
+    // would think it is unencrypted, hand ciphertext to the UI, and a second
+    // setup attempt would overwrite it.
+    //
+    // These three writes sit inside the try as well: localStorage can throw
+    // (quota, disabled storage), and if the third one failed from outside it
+    // the rollback below would never run — leaving a stale salt and verifier
+    // for a password nobody holds, plus the key still in memory.
+    localStorage.setItem(ENC_SALT_KEY, bufferToBase64(salt));
+    localStorage.setItem(ENC_VERIFIER_KEY, verifier);
+    localStorage.setItem(ENC_ENABLED_KEY, 'true');
+
     // Read the raw rows here rather than taking them from the caller: what the
     // UI holds are decrypted views (or placeholders for unreadable records),
     // and sealing one of those would overwrite real ciphertext with a fake.
