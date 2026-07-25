@@ -111,6 +111,9 @@ export async function addCard(card) {
     notes: card.notes || '',
     color: card.color || DEFAULT_CARD_COLOR,
     logoUrl: card.logoUrl || '',
+    // Kept in the clear alongside colour/dates so favourites can be grouped
+    // without decrypting every card first.
+    favorite: card.favorite === true,
     createdAt: now,
     updatedAt: now
   };
@@ -132,6 +135,16 @@ export async function updateCard(card) {
   const toStore = isEncryptionEnabled() ? await encryptCard(updated) : updated;
   await db.put(STORE_NAME, toStore);
   return updated;
+}
+
+/**
+ * Flips the favourite flag. Goes through updateCard so the encrypt/decrypt
+ * round-trip stays in one place.
+ */
+export async function toggleFavorite(id) {
+  const card = await getCard(id);
+  if (!card) throw new Error('Carta non trovata');
+  return updateCard({ id, favorite: !card.favorite });
 }
 
 export async function deleteCard(id) {

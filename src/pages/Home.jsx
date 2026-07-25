@@ -10,7 +10,7 @@ import { InstallPrompt } from '../components/InstallPrompt';
 import { PageMessage } from '../components/PageMessage';
 
 export function Home() {
-  const { cards, loading } = useCards();
+  const { cards, loading, toggleFav } = useCards();
   const { query, setQuery, filtered } = useSearch(cards);
   const { mode, setMode, sections } = useSortedCards(filtered);
 
@@ -37,7 +37,7 @@ export function Home() {
           Nessuna carta corrisponde a "{query}".
         </PageMessage>
       ) : (
-        <CardList sections={sections} />
+        <CardList sections={sections} onToggleFavorite={toggleFav} />
       )}
 
       <button

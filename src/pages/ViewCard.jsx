@@ -1,6 +1,6 @@
 import { route } from 'preact-router';
 import { useState, useEffect } from 'preact/hooks';
-import { getCard, deleteCard } from '../db';
+import { getCard, deleteCard, toggleFavorite } from '../db';
 import { BarcodeDisplay } from '../components/BarcodeDisplay';
 import { ShareModal } from '../components/ShareModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -37,6 +37,12 @@ export function ViewCard({ id, showToast }) {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
+
+  const handleToggleFavorite = async () => {
+    const updated = await toggleFavorite(id);
+    setCard(updated);
+    showToast(updated.favorite ? 'Aggiunta ai preferiti' : 'Rimossa dai preferiti');
+  };
 
   const handleDelete = async () => {
     setConfirmDelete(false);
@@ -86,6 +92,21 @@ export function ViewCard({ id, showToast }) {
         class="view-card-header"
         style={{ background: cardGradient(cardColor), color: getContrastColor(cardColor) }}
       >
+        <button
+          class="view-card-fav"
+          onClick={handleToggleFavorite}
+          aria-label={card.favorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
+          aria-pressed={Boolean(card.favorite)}
+        >
+          <svg
+            width="22" height="22" viewBox="0 0 24 24"
+            fill={card.favorite ? 'currentColor' : 'none'}
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            style={{ opacity: card.favorite ? 1 : 0.6 }}
+          >
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
+        </button>
         <h2 class="view-card-name">{card.providerName}</h2>
         <p class="view-card-number">{card.cardNumber}</p>
       </div>
@@ -149,10 +170,28 @@ export function ViewCard({ id, showToast }) {
           opacity: 0.6;
         }
         .view-card-header {
+          position: relative;
           border-radius: var(--radius-lg);
           padding: var(--space-6);
           text-align: center;
           box-shadow: var(--shadow-md);
+        }
+        .view-card-fav {
+          position: absolute;
+          top: var(--space-2);
+          right: var(--space-2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          color: inherit;
+          -webkit-tap-highlight-color: transparent;
+          transition: transform 0.12s ease;
+        }
+        .view-card-fav:active {
+          transform: scale(0.85);
         }
         .view-card-name {
           font-size: var(--text-xl);

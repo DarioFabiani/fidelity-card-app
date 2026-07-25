@@ -44,25 +44,35 @@ export function useSortedCards(cards) {
   }, []);
 
   const sections = useMemo(() => {
-    if (mode !== SORT_ALPHA) {
-      return [{ letter: null, cards }];
-    }
+    const byName = (a, b) =>
+      (a.providerName || '').localeCompare(b.providerName || '', 'it', { sensitivity: 'base' });
 
-    const sorted = [...cards].sort((a, b) =>
-      (a.providerName || '').localeCompare(b.providerName || '', 'it', { sensitivity: 'base' })
-    );
+    // Favourites are pulled out first and always sit on top, whichever
+    // ordering is active — they're the cards reached most often.
+    const favorites = cards.filter(c => c.favorite);
+    const rest = cards.filter(c => !c.favorite);
+
+    const head = favorites.length
+      ? [{ key: 'fav', label: 'Preferiti', starred: true, cards: mode === SORT_ALPHA ? [...favorites].sort(byName) : favorites }]
+      : [];
+
+    if (mode !== SORT_ALPHA) {
+      return rest.length
+        ? [...head, { key: 'all', label: favorites.length ? 'Tutte le altre' : null, cards: rest }]
+        : head;
+    }
 
     const grouped = [];
-    for (const card of sorted) {
+    for (const card of [...rest].sort(byName)) {
       const letter = sectionLetter(card.providerName);
       const last = grouped[grouped.length - 1];
-      if (last && last.letter === letter) {
+      if (last && last.key === letter) {
         last.cards.push(card);
       } else {
-        grouped.push({ letter, cards: [card] });
+        grouped.push({ key: letter, label: letter, cards: [card] });
       }
     }
-    return grouped;
+    return [...head, ...grouped];
   }, [cards, mode]);
 
   return { mode, setMode, sections };
