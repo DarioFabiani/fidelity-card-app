@@ -1,17 +1,38 @@
 import { exportCards, importCards } from '../db';
+import { DEFAULT_CARD_COLOR } from './color';
 import { deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer } from './crypto';
 
 const EXPORT_FORMAT = 'fidelity-card-app';
 const EXPORT_VERSION = 2;
 
+/**
+ * Rebuilds each card from known fields only, rather than trusting the file's
+ * shape. A backup is external input: passing extra fields straight through
+ * would let a hand-edited file smuggle in an `_enc` blob, which the app would
+ * then read as an encrypted record it has no key for — and that state locks
+ * the whole vault. Types are coerced too, so a missing createdAt can't turn
+ * date ordering into NaN comparisons.
+ */
 function validateCards(cards) {
   if (!Array.isArray(cards)) throw new Error('Formato non valido');
-  for (const card of cards) {
-    if (!card.id || !card.providerName || !card.cardNumber) {
+  const now = Date.now();
+  return cards.map(card => {
+    if (!card || !card.id || !card.providerName || !card.cardNumber) {
       throw new Error('Dati carta incompleti');
     }
-  }
-  return cards;
+    return {
+      id: String(card.id),
+      providerName: String(card.providerName),
+      cardNumber: String(card.cardNumber),
+      barcodeFormat: card.barcodeFormat ? String(card.barcodeFormat) : 'CODE128',
+      notes: card.notes ? String(card.notes) : '',
+      color: card.color ? String(card.color) : DEFAULT_CARD_COLOR,
+      logoUrl: card.logoUrl ? String(card.logoUrl) : '',
+      favorite: card.favorite === true,
+      createdAt: Number.isFinite(card.createdAt) ? card.createdAt : now,
+      updatedAt: Number.isFinite(card.updatedAt) ? card.updatedAt : now
+    };
+  });
 }
 
 function saveFile(text) {

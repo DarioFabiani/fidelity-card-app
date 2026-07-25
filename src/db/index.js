@@ -211,6 +211,11 @@ export async function deleteCard(id) {
 }
 
 export async function importCards(cards) {
+  // Last line of defence: a record carrying `_enc` from outside would look
+  // like ciphertext this device has no key for, and lock the whole vault.
+  if (cards.some(c => c && c._enc)) {
+    throw new Error('Il file contiene dati cifrati non validi');
+  }
   const db = await getDB();
   // Encrypt (if needed) before opening the transaction: crypto.subtle calls
   // are async and can span multiple ticks, which would otherwise let the
