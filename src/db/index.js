@@ -7,6 +7,11 @@ const STORE_NAME = 'cards';
 
 const ENC_ENABLED_KEY = 'fidelity-encryption-enabled';
 const ENC_SALT_KEY = 'fidelity-encryption-salt';
+// A known constant sealed with the master key at setup time. Decrypting it is
+// what proves a password is right, so verification no longer depends on there
+// being at least one card in the vault.
+const ENC_VERIFIER_KEY = 'fidelity-encryption-verifier';
+const VERIFIER_PLAINTEXT = { v: 1 };
 
 // The AES-GCM key derived from the master password. Lives only in memory for
 // the lifetime of the tab/app instance — it is NEVER written to IndexedDB,
@@ -165,6 +170,7 @@ export async function enableEncryption(password, existingCards) {
 
   setEncryptionKey(key);
   localStorage.setItem(ENC_SALT_KEY, bufferToBase64(salt));
+  localStorage.setItem(ENC_VERIFIER_KEY, await encryptJSON(VERIFIER_PLAINTEXT, key));
 
   const encryptedCards = await Promise.all(existingCards.map(encryptCard));
 
@@ -195,35 +201,49 @@ export async function disableEncryption() {
 
   localStorage.removeItem(ENC_ENABLED_KEY);
   localStorage.removeItem(ENC_SALT_KEY);
+  localStorage.removeItem(ENC_VERIFIER_KEY);
   clearEncryptionKey();
 }
 
 /**
- * Derives the key from `password` using the stored salt and verifies it by
- * attempting to decrypt an existing card. Returns true and keeps the key in
- * memory on success, false (key discarded) if the password is wrong.
+ * Derives the key from `password` using the stored salt and verifies it against
+ * the stored verifier. Returns true and keeps the key in memory on success,
+ * false (key discarded) if the password is wrong.
  */
 export async function unlock(password) {
   const salt = getStoredSalt();
   if (!salt) return false;
 
   const key = await deriveKey(password, salt);
+  const verifier = localStorage.getItem(ENC_VERIFIER_KEY);
+
+  if (verifier) {
+    try {
+      await decryptJSON(verifier, key);
+    } catch {
+      return false;
+    }
+    setEncryptionKey(key);
+    return true;
+  }
+
+  // Vault set up before verifiers existed. Check against an encrypted card
+  // instead; if the vault is also empty there is no key to contradict, so any
+  // password is accepted. Either way a verifier is written, which pins the key
+  // from now on — later unlocks take the branch above and reject the rest.
   const db = await getDB();
   const raw = await db.getAll(STORE_NAME);
   const sample = raw.find(c => c._enc);
 
-  if (!sample) {
-    // No encrypted card to verify against yet (e.g. encryption was just
-    // enabled with an empty vault) — accept the derived key as-is.
-    setEncryptionKey(key);
-    return true;
+  if (sample) {
+    try {
+      await decryptJSON(sample._enc, key);
+    } catch {
+      return false;
+    }
   }
 
-  try {
-    await decryptJSON(sample._enc, key);
-    setEncryptionKey(key);
-    return true;
-  } catch {
-    return false;
-  }
+  setEncryptionKey(key);
+  localStorage.setItem(ENC_VERIFIER_KEY, await encryptJSON(VERIFIER_PLAINTEXT, key));
+  return true;
 }

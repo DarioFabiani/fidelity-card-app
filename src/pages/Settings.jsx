@@ -1,98 +1,10 @@
 import { useState } from 'preact/hooks';
 import { route } from 'preact-router';
-import { downloadExport, uploadImport } from '../utils/export-import';
+import { downloadExport, pickImportFile, decryptImport, commitImport } from '../utils/export-import';
 import { getAllCards, isEncryptionEnabled, enableEncryption, disableEncryption } from '../db';
 import { PageHeader } from '../components/PageHeader';
-
-function EncryptionSetupModal({ onClose, onEnabled, showToast }) {
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (saving) return;
-    setError('');
-
-    if (password.length < 6) {
-      setError('La password deve avere almeno 6 caratteri');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Le due password non coincidono');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const cards = await getAllCards();
-      await enableEncryption(password, cards);
-      onEnabled();
-    } catch {
-      showToast('Errore nell\'attivazione della cifratura', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div class="modal-overlay" onClick={onClose}>
-      <div class="modal-content" onClick={e => e.stopPropagation()}>
-        <h3 class="encryption-modal-title">Attiva cifratura</h3>
-        <p class="encryption-modal-desc">
-          Scegli una master password. Verrà usata per cifrare i dati delle carte sul dispositivo (AES-256-GCM) e non viene mai salvata: se la dimentichi non potrai più recuperare i dati cifrati.
-        </p>
-        <form onSubmit={handleSubmit} class="encryption-modal-form">
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onInput={e => setPassword(e.target.value)}
-            autoFocus
-          />
-          <input
-            type="password"
-            placeholder="Conferma password"
-            value={confirmPassword}
-            onInput={e => setConfirmPassword(e.target.value)}
-          />
-          {error && <p class="encryption-modal-error">{error}</p>}
-          <button type="submit" class="btn btn-primary btn-block" disabled={saving}>
-            {saving ? 'Attivazione...' : 'Attiva cifratura'}
-          </button>
-          <button type="button" class="btn btn-outline btn-block" onClick={onClose} disabled={saving}>
-            Annulla
-          </button>
-        </form>
-      </div>
-
-      <style>{`
-        .encryption-modal-title {
-          font-size: 18px;
-          font-weight: 700;
-          margin-bottom: 12px;
-          text-align: center;
-        }
-        .encryption-modal-desc {
-          font-size: 13px;
-          color: var(--color-text-secondary);
-          margin-bottom: 20px;
-          line-height: 1.5;
-        }
-        .encryption-modal-form {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-        .encryption-modal-error {
-          font-size: 13px;
-          color: var(--color-danger);
-        }
-      `}</style>
-    </div>
-  );
-}
+import { PasswordPrompt } from '../components/PasswordPrompt';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 export function Settings({ showToast }) {
   const [exporting, setExporting] = useState(false);
@@ -100,12 +12,13 @@ export function Settings({ showToast }) {
   const [encryptionEnabled, setEncryptionEnabled] = useState(isEncryptionEnabled());
   const [showSetup, setShowSetup] = useState(false);
   const [confirmDisable, setConfirmDisable] = useState(false);
-  const [disabling, setDisabling] = useState(false);
+  const [askExportPassword, setAskExportPassword] = useState(false);
+  const [pendingImport, setPendingImport] = useState(null);
 
-  const handleExport = async () => {
+  const runExport = async (password) => {
     setExporting(true);
     try {
-      const count = await downloadExport();
+      const count = await downloadExport(password);
       showToast(`${count} carte esportate`);
     } catch {
       showToast('Errore nell\'esportazione', 'error');
@@ -114,13 +27,27 @@ export function Settings({ showToast }) {
     }
   };
 
+  // With encryption on, the backup leaves the device — so it gets its own
+  // password rather than being written out in the clear.
+  const handleExport = () => {
+    if (encryptionEnabled) {
+      setAskExportPassword(true);
+    } else {
+      runExport(null);
+    }
+  };
+
   const handleImport = async () => {
     setImporting(true);
     try {
-      const count = await uploadImport();
-      if (count > 0) {
-        showToast(`${count} carte importate`);
+      const picked = await pickImportFile();
+      if (!picked) return;
+      if (picked.encrypted) {
+        setPendingImport(picked);
+        return;
       }
+      const count = await commitImport(picked.cards);
+      showToast(`${count} carte importate`);
     } catch (err) {
       showToast(err.message || 'Errore nell\'importazione', 'error');
     } finally {
@@ -129,20 +56,13 @@ export function Settings({ showToast }) {
   };
 
   const handleDisable = async () => {
-    if (!confirmDisable) {
-      setConfirmDisable(true);
-      return;
-    }
-    setDisabling(true);
+    setConfirmDisable(false);
     try {
       await disableEncryption();
       setEncryptionEnabled(false);
       showToast('Cifratura disattivata');
     } catch {
       showToast('Errore nella disattivazione della cifratura', 'error');
-    } finally {
-      setDisabling(false);
-      setConfirmDisable(false);
     }
   };
 
@@ -156,7 +76,7 @@ export function Settings({ showToast }) {
         <button class="settings-item" onClick={handleExport} disabled={exporting}>
           <div class="settings-item-content">
             <span class="settings-item-label">Esporta carte</span>
-            <span class="settings-item-desc">Scarica un backup in formato JSON</span>
+            <span class="settings-item-desc">{encryptionEnabled ? 'Backup JSON protetto da password' : 'Scarica un backup in formato JSON'}</span>
           </div>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -182,21 +102,10 @@ export function Settings({ showToast }) {
         <h3 class="settings-section-title">Sicurezza</h3>
 
         {encryptionEnabled ? (
-          <button
-            class="settings-item"
-            onClick={handleDisable}
-            onBlur={() => setConfirmDisable(false)}
-            disabled={disabling}
-          >
+          <button class="settings-item" onClick={() => setConfirmDisable(true)}>
             <div class="settings-item-content">
-              <span class="settings-item-label">
-                {confirmDisable ? 'Conferma disattivazione' : 'Disattiva cifratura'}
-              </span>
-              <span class="settings-item-desc">
-                {confirmDisable
-                  ? 'I dati delle carte torneranno salvati in chiaro sul dispositivo'
-                  : 'Le carte verranno salvate di nuovo in chiaro'}
-              </span>
+              <span class="settings-item-label">Disattiva cifratura</span>
+              <span class="settings-item-desc">Le carte verranno salvate di nuovo in chiaro</span>
             </div>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -231,14 +140,65 @@ export function Settings({ showToast }) {
       </div>
 
       {showSetup && (
-        <EncryptionSetupModal
+        <PasswordPrompt
+          title="Attiva cifratura"
+          description="Scegli una master password. Verrà usata per cifrare i dati delle carte sul dispositivo (AES-256-GCM) e non viene mai salvata: se la dimentichi non potrai più recuperare i dati cifrati."
+          submitLabel="Attiva cifratura"
+          withConfirm
+          minLength={6}
           onClose={() => setShowSetup(false)}
-          onEnabled={() => {
+          onSubmit={async (password) => {
+            try {
+              await enableEncryption(password, await getAllCards());
+            } catch {
+              return 'Errore nell\'attivazione della cifratura';
+            }
             setEncryptionEnabled(true);
             setShowSetup(false);
             showToast('Cifratura attivata');
           }}
-          showToast={showToast}
+        />
+      )}
+
+      {askExportPassword && (
+        <PasswordPrompt
+          title="Proteggi il backup"
+          description="Il file di backup lascia il dispositivo, quindi viene cifrato con una password. Può essere la stessa master password o un'altra: ti servirà per reimportarlo."
+          submitLabel="Esporta"
+          withConfirm
+          minLength={6}
+          onClose={() => setAskExportPassword(false)}
+          onSubmit={async (password) => {
+            setAskExportPassword(false);
+            await runExport(password);
+          }}
+        />
+      )}
+
+      {pendingImport && (
+        <PasswordPrompt
+          title="Backup protetto"
+          description="Questo backup è cifrato. Inserisci la password usata al momento dell'esportazione."
+          submitLabel="Importa"
+          onClose={() => setPendingImport(null)}
+          onSubmit={async (password) => {
+            const cards = await decryptImport(pendingImport, password);
+            if (!cards) return 'Password errata o file di backup corrotto';
+            const count = await commitImport(cards);
+            setPendingImport(null);
+            showToast(`${count} carte importate`);
+          }}
+        />
+      )}
+
+      {confirmDisable && (
+        <ConfirmDialog
+          title="Disattivare la cifratura?"
+          message="I dati delle carte torneranno salvati in chiaro su questo dispositivo, senza protezione da password."
+          confirmLabel="Disattiva"
+          danger
+          onConfirm={handleDisable}
+          onCancel={() => setConfirmDisable(false)}
         />
       )}
 
