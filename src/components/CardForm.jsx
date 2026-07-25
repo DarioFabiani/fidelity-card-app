@@ -56,6 +56,11 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
     setProviderName(provider.name);
     setColor(provider.color);
     setBarcodeFormat(provider.barcodeFormat);
+    // The provider carries the format its cards actually use — that is a
+    // choice as explicit as picking from the menu, so stop guessing from the
+    // number afterwards. Without this, typing the number right after picking
+    // the shop silently overrode it.
+    setFormatPickedByUser(true);
     setSuggestions([]);
   };
 

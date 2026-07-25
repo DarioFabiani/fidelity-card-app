@@ -98,6 +98,18 @@ export default defineConfig({
               cacheName: 'barcode-scanner',
               expiration: { maxEntries: 2 }
             }
+          },
+          {
+            // Kept alongside the precache, not instead of it. The precache
+            // covers the current build; this keeps the PREVIOUS build's chunk
+            // reachable for a tab that was already open when a new version was
+            // deployed, whose hashed filename no longer exists on the server.
+            urlPattern: /\/assets\/(barcode|qrcode)-.*\.js$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'barcode-render',
+              expiration: { maxEntries: 6 }
+            }
           }
         ]
       }

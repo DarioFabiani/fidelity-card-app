@@ -38,6 +38,9 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
   }, [value, format, isQrCode]);
 
   if (error) {
+    // Styles live in app.css, not in the success branch's <style> below:
+    // that block never renders when this early return fires, which left the
+    // message as unstyled bare text.
     return (
       <div class="barcode-error">
         Impossibile generare il codice a barre
@@ -117,15 +120,6 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
           font-size: 16px;
           font-weight: 600;
           cursor: pointer;
-        }
-        .barcode-error {
-          background: var(--color-surface);
-          border: 1px dashed var(--color-border);
-          border-radius: var(--radius);
-          padding: 24px;
-          text-align: center;
-          color: var(--color-text-secondary);
-          font-size: 14px;
         }
       `}</style>
     </>
