@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Header } from './components/Header';
 import { Toast } from './components/Toast';
 import { UnlockScreen } from './components/UnlockScreen';
-import { PageMessage } from './components/PageMessage';
+import { VaultRecovery } from './components/VaultRecovery';
 import { isEncryptionEnabled, hasEncryptionKey, repairEncryptionState } from './db';
 import { Home } from './pages/Home';
 import { AddCard } from './pages/AddCard';
@@ -16,15 +16,24 @@ export function App() {
   const [toast, setToast] = useState(null);
   const [unlocked, setUnlocked] = useState(() => !isEncryptionEnabled() || hasEncryptionKey());
   const [vaultError, setVaultError] = useState('');
+  // Gate the router until the vault state is known. Rendering optimistically
+  // let pages mount and read the db during the check — briefly enough that no
+  // ciphertext ever reached the UI, but long enough for an export started in
+  // that window to silently produce an empty backup.
+  const [checked, setChecked] = useState(false);
 
   // An interrupted setup can leave sealed cards with the flag off. Detect that
-  // before rendering the list, so we ask to unlock instead of showing rows of
+  // before rendering anything, so we ask to unlock instead of showing rows of
   // undefined fields.
   useEffect(() => {
-    if (hasEncryptionKey()) return;
+    if (hasEncryptionKey()) {
+      setChecked(true);
+      return;
+    }
     repairEncryptionState()
       .then(active => { if (active) setUnlocked(false); })
-      .catch(err => setVaultError(err.message));
+      .catch(err => setVaultError(err.message))
+      .finally(() => setChecked(true));
   }, []);
 
   const showToast = useCallback((message, type = 'success') => {
@@ -36,11 +45,11 @@ export function App() {
   }, []);
 
   if (vaultError) {
-    return (
-      <div class="page" style={{ paddingTop: 'calc(var(--space-6) * 2)' }}>
-        <PageMessage title="Impossibile leggere i dati">{vaultError}</PageMessage>
-      </div>
-    );
+    return <VaultRecovery message={vaultError} />;
+  }
+
+  if (!checked) {
+    return null;
   }
 
   if (!unlocked) {

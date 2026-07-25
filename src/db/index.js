@@ -205,6 +205,31 @@ export async function toggleFavorite(id) {
   return updateCard({ id, favorite: !card.favorite });
 }
 
+/**
+ * Every stored record exactly as it sits on disk, ciphertext included. The
+ * escape hatch for a vault that cannot be opened: it needs no key and cannot
+ * fail, so the user always has something to save before resetting.
+ */
+export async function dumpRawRecords() {
+  const db = await getDB();
+  return db.getAll(STORE_NAME);
+}
+
+/**
+ * Wipes every card and all encryption settings. Last resort for a vault stuck
+ * in an unopenable state — destructive, so only ever behind a confirmation.
+ */
+export async function resetEverything() {
+  const db = await getDB();
+  const tx = db.transaction(STORE_NAME, 'readwrite');
+  await tx.store.clear();
+  await tx.done;
+  localStorage.removeItem(ENC_ENABLED_KEY);
+  localStorage.removeItem(ENC_SALT_KEY);
+  localStorage.removeItem(ENC_VERIFIER_KEY);
+  clearEncryptionKey();
+}
+
 export async function deleteCard(id) {
   const db = await getDB();
   await db.delete(STORE_NAME, id);
