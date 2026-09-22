@@ -4,11 +4,28 @@ import { getCard, getAllCards, updateCard } from '../db';
 import { CardForm } from '../components/CardForm';
 import { PageHeader } from '../components/PageHeader';
 import { PageMessage } from '../components/PageMessage';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useLeaveGuard } from '../hooks/useLeaveGuard';
+
+/**
+ * Back to the card this form was opened from. When the card page is the entry
+ * right behind us (ViewCard marks it), going back to it keeps history as
+ * list → card, so one Back returns to the list; replacing instead left
+ * list → card → card and needed two.
+ */
+function returnToCard(id) {
+  if (window.history.state?.editFrom === id) {
+    window.history.back();
+  } else {
+    route(`/fidelity-card-app/card/${id}`, true);
+  }
+}
 
 export function EditCard({ id, showToast }) {
   const [card, setCard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [allCards, setAllCards] = useState([]);
+  const guard = useLeaveGuard(() => returnToCard(id));
 
   useEffect(() => {
     // Only feeds the duplicate-number hint; a failure just hides it.
@@ -26,9 +43,9 @@ export function EditCard({ id, showToast }) {
 
   const handleSubmit = async (data) => {
     await updateCard({ ...data, id });
+    guard.markSaved();
     showToast('Carta aggiornata!');
-    // Replace, so Back from the card does not reopen the form just saved.
-    route(`/fidelity-card-app/card/${id}`, true);
+    returnToCard(id);
   };
 
   if (loading) {
@@ -77,9 +94,25 @@ export function EditCard({ id, showToast }) {
     <div class="page">
       <PageHeader
         title="Modifica carta"
-        onBack={() => route(`/fidelity-card-app/card/${id}`)}
+        onBack={guard.requestLeave}
       />
-      <CardForm initial={card} onSubmit={handleSubmit} submitLabel="Salva modifiche" existingCards={allCards} />
+      <CardForm
+        initial={card}
+        onSubmit={handleSubmit}
+        submitLabel="Salva modifiche"
+        existingCards={allCards}
+        onDirtyChange={guard.onDirtyChange}
+      />
+      {guard.asking && (
+        <ConfirmDialog
+          title="Scartare le modifiche?"
+          message="Le modifiche a questa carta non sono state salvate."
+          confirmLabel="Scarta"
+          danger
+          onConfirm={guard.confirm}
+          onCancel={guard.cancel}
+        />
+      )}
     </div>
   );
 }

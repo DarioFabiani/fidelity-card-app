@@ -183,3 +183,26 @@ describe('vault key changes under pressure', () => {
     expect(cards.filter(c => !c._unreadable)).toHaveLength(1);
   });
 });
+
+describe('recovery copy', () => {
+  it('can be imported back with the password after a reset', async () => {
+    await seed();
+    await db.enableEncryption('vecchia1');
+    const dump = JSON.parse(JSON.stringify(await db.dumpVault()));
+    await db.resetEverything();
+
+    const { parseBackup, decryptImport, commitImport } = await import('../utils/export-import');
+    const parsed = parseBackup(dump);
+    expect(parsed.encrypted).toBe(true);
+    expect(await decryptImport(parsed, 'sbagliata')).toBeNull();
+    const cards = await decryptImport(parsed, 'vecchia1');
+    expect(cards.map(c => c.providerName).sort()).toEqual(['Conad', 'Coop']);
+    expect(await commitImport(cards)).toMatchObject({ added: 2 });
+    expect(await names()).toEqual(['Conad', 'Coop']);
+  });
+
+  it('refuses an old raw copy with no key parameters, with a clear message', async () => {
+    const { parseBackup } = await import('../utils/export-import');
+    expect(() => parseBackup([{ id: 'x', _enc: 'abc' }])).toThrow(/parametri di cifratura/);
+  });
+});

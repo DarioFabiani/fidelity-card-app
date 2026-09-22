@@ -340,6 +340,31 @@ export async function dumpRawRecords() {
   return db.getAll(STORE_NAME);
 }
 
+export const RAW_DUMP_FORMAT = 'fidelity-card-app-raw';
+
+/**
+ * The raw records plus the key parameters (salt, verifier, iteration count —
+ * none of them secret). Without the salt the dump could never be decrypted,
+ * not even by someone who remembers the password later: with it, the dump can
+ * be imported back once the password comes to mind.
+ */
+export async function dumpVault() {
+  const salt = localStorage.getItem(ENC_SALT_KEY);
+  return {
+    format: RAW_DUMP_FORMAT,
+    version: 1,
+    encryption: salt
+      ? {
+          salt,
+          verifier: localStorage.getItem(ENC_VERIFIER_KEY),
+          iterations: getStoredIterations(),
+          pending: readPendingParams()
+        }
+      : null,
+    records: await dumpRawRecords()
+  };
+}
+
 /**
  * Wipes every card and all encryption settings. Last resort for a vault stuck
  * in an unopenable state — destructive, so only ever behind a confirmation.
@@ -358,10 +383,14 @@ export async function deleteCard(id) {
   await db.delete(STORE_NAME, id);
 }
 
-/** Ids already stored, so an import can report what it is about to replace. */
-export async function listCardIds() {
+/**
+ * id -> updatedAt of every stored card (both in the clear, no key needed), so
+ * an import can tell new cards from newer and older copies of existing ones.
+ */
+export async function listCardVersions() {
   const db = await getDB();
-  return db.getAllKeys(STORE_NAME);
+  const raw = await db.getAll(STORE_NAME);
+  return new Map(raw.map(r => [r.id, Number.isFinite(r.updatedAt) ? r.updatedAt : 0]));
 }
 
 export async function importCards(cards) {

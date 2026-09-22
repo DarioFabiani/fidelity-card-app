@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { useBackToClose } from '../hooks/useBackToClose';
 
 /**
  * Modal that collects a password. `onSubmit` may return an error message
@@ -22,6 +23,7 @@ export function PasswordPrompt({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  useBackToClose(true, () => { if (!busy) onClose(); });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -52,8 +54,8 @@ export function PasswordPrompt({
 
   return (
     <div class="modal-overlay" onClick={busy ? undefined : onClose}>
-      <div class="modal-content" onClick={e => e.stopPropagation()}>
-        <h3 class="pw-title">{title}</h3>
+      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="pw-title" onClick={e => e.stopPropagation()}>
+        <h3 class="pw-title" id="pw-title">{title}</h3>
         {description && <p class="pw-desc">{description}</p>}
 
         <form onSubmit={handleSubmit} class="pw-form">

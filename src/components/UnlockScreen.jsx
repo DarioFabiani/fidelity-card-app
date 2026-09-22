@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useState, useRef } from 'preact/hooks';
 import { unlock } from '../db';
 import { LockIcon } from './icons';
 
@@ -6,6 +6,7 @@ export function UnlockScreen({ onUnlock, onRecover }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const inputRef = useRef(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,6 +19,9 @@ export function UnlockScreen({ onUnlock, onRecover }) {
         onUnlock();
       } else {
         setError('Password errata. Riprova.');
+        // Ready for the next attempt: empty and focused.
+        setPassword('');
+        setTimeout(() => inputRef.current?.focus(), 0);
       }
     } catch {
       setError('Errore durante lo sblocco. Riprova.');
@@ -38,7 +42,11 @@ export function UnlockScreen({ onUnlock, onRecover }) {
         </p>
         <form onSubmit={handleSubmit}>
           <input
+            ref={inputRef}
             type="password"
+            autoComplete="current-password"
+            aria-label="Password"
+            aria-invalid={Boolean(error)}
             placeholder="Password"
             value={password}
             onInput={e => setPassword(e.target.value)}

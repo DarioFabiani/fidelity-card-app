@@ -7,8 +7,9 @@ import { ShareModal } from '../components/ShareModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PageMessage } from '../components/PageMessage';
 import { DEFAULT_CARD_COLOR } from '../utils/color';
-import { formatCardNumber } from '../utils/format';
+import { formatCardNumber, normalizeCardNumber } from '../utils/format';
 import { copyToClipboard } from '../utils/share';
+import { afterOverlayClosed } from '../hooks/useBackToClose';
 import { StarIcon, ShareIcon, BackArrowIcon } from '../components/icons';
 
 export function ViewCard({ id, showToast }) {
@@ -99,13 +100,23 @@ export function ViewCard({ id, showToast }) {
       return;
     }
     showToast('Carta eliminata');
+    // The dialog's history entry is still being popped: navigating first
+    // would be undone when that Back lands, reopening the deleted card.
+    await afterOverlayClosed();
     // Replace: Back must not land on a card that no longer exists.
     route('/fidelity-card-app/', true);
   };
 
+  // Marks the edit page's history entry with where it came from, so saving
+  // there can step back to this entry instead of stacking another card page.
+  const openEdit = () => {
+    route(`/fidelity-card-app/edit/${card.id}`);
+    window.history.replaceState({ ...(window.history.state || {}), editFrom: card.id }, '', window.location.href);
+  };
+
   // Online checkouts and apps ask for the number typed in, not scanned.
   const handleCopyNumber = async () => {
-    const ok = await copyToClipboard(card.cardNumber);
+    const ok = await copyToClipboard(normalizeCardNumber(card.cardNumber));
     showToast(ok ? 'Numero copiato' : 'Errore nella copia', ok ? 'success' : 'error');
   };
 
@@ -174,14 +185,14 @@ export function ViewCard({ id, showToast }) {
             <StarIcon
               size={22}
               fill={card.favorite ? 'currentColor' : 'none'}
-              opacity={card.favorite ? 1 : 0.6}
+              opacity={card.favorite ? 1 : 0.85}
             />
           </button>
         }
       />
 
       <div style={{ marginTop: '16px' }}>
-        <BarcodeDisplay value={card.cardNumber} format={card.barcodeFormat} />
+        <BarcodeDisplay value={normalizeCardNumber(card.cardNumber)} format={card.barcodeFormat} />
       </div>
 
       <button class="view-copy" onClick={handleCopyNumber}>
@@ -199,11 +210,11 @@ export function ViewCard({ id, showToast }) {
       )}
 
       <div class="view-card-actions">
-        <button class="btn btn-primary" onClick={() => setShowShare(true)} style={{ flex: 1 }}>
+        <button class="btn btn-primary view-share" onClick={() => setShowShare(true)}>
           <ShareIcon size={18} />
           Condividi
         </button>
-        <button class="btn btn-outline" onClick={() => route(`/fidelity-card-app/edit/${card.id}`)} style={{ flex: 1 }}>
+        <button class="btn btn-outline" onClick={openEdit}>
           Modifica
         </button>
         <button class="btn btn-outline btn-delete" onClick={() => setConfirmDelete(true)}>
@@ -228,6 +239,7 @@ export function ViewCard({ id, showToast }) {
 
       <style>{`
         .view-back {
+          min-height: 44px;
           display: inline-flex;
           align-items: center;
           gap: var(--space-1);
@@ -243,6 +255,7 @@ export function ViewCard({ id, showToast }) {
           opacity: 0.6;
         }
         .view-copy {
+          min-height: 44px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -274,11 +287,16 @@ export function ViewCard({ id, showToast }) {
           white-space: pre-wrap;
           overflow-wrap: anywhere;
         }
+        /* Share on its own row, Edit and Delete side by side below: with
+           three buttons in a wrapping row, Delete ended up alone, left-aligned. */
         .view-card-actions {
-          display: flex;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
           gap: var(--space-2);
           margin-top: var(--space-5);
-          flex-wrap: wrap;
+        }
+        .view-share {
+          grid-column: 1 / -1;
         }
         .btn-delete {
           color: var(--color-danger);

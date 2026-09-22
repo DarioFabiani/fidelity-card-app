@@ -1,7 +1,11 @@
 import { useRef, useEffect, useState } from 'preact/hooks';
 import { formatLabel } from '../constants/barcodeFormats';
+import { useBackToClose } from '../hooks/useBackToClose';
 
-export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = true, compact = false }) {
+// `showFallbackWarning`: only the form, where the user can still fix the
+// number or the format. At the till the notice was noise for cards saved
+// that way on purpose.
+export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = true, compact = false, showFallbackWarning = false }) {
   const svgRef = useRef(null);
   const canvasRef = useRef(null);
   const isQrCode = format === 'QR_CODE';
@@ -9,6 +13,8 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
   // The number is not valid for the chosen format and was drawn as Code 128.
   const [fellBack, setFellBack] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+
+  useBackToClose(fullscreen, () => setFullscreen(false));
 
   // Escape closes the enlarged code on a desktop/keyboard.
   useEffect(() => {
@@ -58,7 +64,7 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
   return (
     <>
       <div
-        class={`barcode-container ${fullscreen ? 'barcode-fullscreen' : ''} ${compact ? 'barcode-compact' : ''}`}
+        class={`barcode-container ${fullscreen ? 'barcode-fullscreen' : ''} ${fullscreen && !isQrCode ? 'barcode-rotated' : ''} ${compact ? 'barcode-compact' : ''}`}
         onClick={fullscreenable && !error ? () => setFullscreen(!fullscreen) : undefined}
       >
         {isQrCode ? (
@@ -69,7 +75,7 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
         {error && (
           <p class="barcode-error">Impossibile generare il codice a barre</p>
         )}
-        {fellBack && !error && !fullscreen && (
+        {showFallbackWarning && fellBack && !error && !fullscreen && (
           <p class="barcode-warning">
             Il numero non è un {formatLabel(format)} valido: mostrato come Code 128.
           </p>
@@ -102,8 +108,8 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
           max-width: 240px;
         }
         .barcode-fullscreen .barcode-qr {
-          width: 100%;
-          max-width: 60vh;
+          width: min(88vw, 70vh);
+          max-width: none;
         }
         .barcode-error {
           padding: 16px;
@@ -146,9 +152,27 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
           padding: 32px;
           cursor: default;
         }
-        .barcode-fullscreen .barcode-svg {
-          max-width: 100%;
-          max-height: 60vh;
+        .barcode-fullscreen {
+          overflow: hidden;
+        }
+        /* "Tocca per ingrandire" used to show the same size on white. A
+           linear code is wide and short, so it is turned sideways to run
+           along the screen's height: bars about twice as large, which is
+           what older till scanners need. The box is sized before rotation:
+           its width becomes the visual height, its height the visual width. */
+        .barcode-rotated .barcode-svg {
+          flex-shrink: 0;
+          width: 82vh;
+          height: auto;
+          max-height: 86vw;
+          transform: rotate(90deg);
+        }
+        .barcode-fullscreen .barcode-close {
+          position: absolute;
+          bottom: calc(16px + env(safe-area-inset-bottom));
+          left: 50%;
+          transform: translateX(-50%);
+          margin: 0;
         }
         .barcode-close {
           margin-top: 24px;

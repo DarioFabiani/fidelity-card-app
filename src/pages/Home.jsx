@@ -36,7 +36,7 @@ export function Home({ showToast }) {
   };
 
   return (
-    <div class="page">
+    <div class="page page-with-fab">
       {cards.length > 0 && (
         <>
           <SearchBar value={query} onInput={setQuery} />

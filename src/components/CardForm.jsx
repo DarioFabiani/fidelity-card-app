@@ -1,9 +1,9 @@
-import { useState, useMemo, useRef } from 'preact/hooks';
+import { useState, useMemo, useRef, useEffect } from 'preact/hooks';
 import { PROVIDERS } from '../constants/providers';
 import { BARCODE_FORMATS, suggestFormat, isAlphanumericFormat } from '../constants/barcodeFormats';
-import { CARD_COLORS, DEFAULT_CARD_COLOR } from '../utils/color';
+import { CARD_COLORS, CARD_COLOR_NAMES, DEFAULT_CARD_COLOR, colorForName } from '../utils/color';
 import { foldText } from '../hooks/useSearch';
-import { sameCardNumber } from '../utils/format';
+import { sameCardNumber, normalizeCardNumber } from '../utils/format';
 import { BarcodeDisplay } from './BarcodeDisplay';
 
 /**
@@ -11,7 +11,7 @@ import { BarcodeDisplay } from './BarcodeDisplay';
  * with the same number — the usual way to end up with duplicates is saving a
  * card someone shared, or re-adding one after forgetting it was there.
  */
-export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCards = [] }) {
+export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCards = [], onDirtyChange }) {
   const [providerName, setProviderName] = useState(initial?.providerName || '');
   const [cardNumber, setCardNumber] = useState(initial?.cardNumber || '');
   const [barcodeFormat, setBarcodeFormat] = useState(initial?.barcodeFormat || 'CODE128');
@@ -19,6 +19,9 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
   // number: re-guessing on every keystroke silently reverted the choice.
   const [formatPickedByUser, setFormatPickedByUser] = useState(false);
   const [color, setColor] = useState(initial?.color || DEFAULT_CARD_COLOR);
+  // Until a colour is chosen (or comes with a suggested shop), a new card
+  // takes one from its name.
+  const [colorPicked, setColorPicked] = useState(Boolean(initial));
   const [notes, setNotes] = useState(initial?.notes || '');
   const [suggestions, setSuggestions] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -44,6 +47,14 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
       setTimeout(() => input.focus(), 0);
     }
   };
+
+  // Lets the page ask before throwing away what was typed.
+  const dirty =
+    providerName !== (initial?.providerName || '') ||
+    cardNumber !== (initial?.cardNumber || '') ||
+    notes !== (initial?.notes || '') ||
+    (initial ? barcodeFormat !== (initial.barcodeFormat || 'CODE128') || color !== (initial.color || DEFAULT_CARD_COLOR) : false);
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty]);
 
   const duplicate = useMemo(
     () => existingCards.find(c => c.id !== initial?.id && !c._unreadable && sameCardNumber(c.cardNumber, cardNumber)),
@@ -78,6 +89,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
 
   const handleProviderInput = (value) => {
     setProviderName(value);
+    if (!colorPicked) setColor(colorForName(value));
     if (value.length >= 1) {
       const q = foldText(value);
       const matches = PROVIDERS.filter(p => foldText(p.name).includes(q));
@@ -90,6 +102,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
   const selectProvider = (provider) => {
     setProviderName(provider.name);
     setColor(provider.color);
+    setColorPicked(true);
     setBarcodeFormat(provider.barcodeFormat);
     // The provider carries the format its cards actually use — that is a
     // choice as explicit as picking from the menu, so stop guessing from the
@@ -116,7 +129,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
     try {
       await onSubmit({
         providerName: providerName.trim(),
-        cardNumber: cardNumber.trim(),
+        cardNumber: normalizeCardNumber(cardNumber),
         barcodeFormat,
         color,
         notes: notes.trim()
@@ -234,7 +247,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
       {cardNumber.trim() && (
         <div class="form-group">
           <span class="label-caps form-label">Anteprima</span>
-          <BarcodeDisplay value={cardNumber.trim()} format={barcodeFormat} fullscreenable={false} compact />
+          <BarcodeDisplay value={normalizeCardNumber(cardNumber)} format={barcodeFormat} fullscreenable={false} compact showFallbackWarning />
         </div>
       )}
 
@@ -247,8 +260,8 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
               type="button"
               class={`color-swatch ${color.toLowerCase() === c.toLowerCase() ? 'is-selected' : ''}`}
               style={{ background: c }}
-              onClick={() => setColor(c)}
-              aria-label={`Colore ${c}`}
+              onClick={() => { setColor(c); setColorPicked(true); }}
+              aria-label={`Colore ${CARD_COLOR_NAMES[c]}`}
               aria-pressed={color.toLowerCase() === c.toLowerCase()}
             />
           ))}
@@ -256,7 +269,8 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
             <input
               type="color"
               value={color}
-              onInput={e => setColor(e.target.value)}
+              onInput={e => { setColor(e.target.value); setColorPicked(true); }}
+              aria-label="Colore personalizzato"
             />
           </label>
         </div>

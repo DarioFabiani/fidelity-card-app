@@ -8,10 +8,13 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LockIcon } from '../components/icons';
 import { AUTOLOCK_OPTIONS, getAutoLockMinutes, setAutoLockMinutes } from '../utils/autolock';
 
-function importSummary({ added, updated }) {
+function importSummary({ added, updated, kept = 0 }) {
   const parts = [];
   if (added) parts.push(`${added} ${added === 1 ? 'carta importata' : 'carte importate'}`);
   if (updated) parts.push(`${updated} ${updated === 1 ? 'aggiornata' : 'aggiornate'}`);
+  if (kept) {
+    parts.push(`${kept} già ${kept === 1 ? 'presente' : 'presenti'} (tenuta la versione più recente)`);
+  }
   return parts.length ? parts.join(', ') : 'Nessuna carta importata';
 }
 
@@ -247,8 +250,10 @@ export function Settings({ showToast }) {
 
       {pendingImport && (
         <PasswordPrompt
-          title="Backup protetto"
-          description="Questo backup è cifrato. Inserisci la password usata al momento dell'esportazione."
+          title={pendingImport.raw ? 'Copia dei dati cifrata' : 'Backup protetto'}
+          description={pendingImport.raw
+            ? 'Questa copia contiene carte cifrate. Inserisci la master password che era in uso quando è stata salvata.'
+            : 'Questo backup è cifrato. Inserisci la password usata al momento dell\'esportazione.'}
           submitLabel="Importa"
           onClose={() => setPendingImport(null)}
           onSubmit={async (password) => {

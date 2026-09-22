@@ -71,6 +71,15 @@ function parseShareData(dataParam) {
   return { salt, sealed, iterations };
 }
 
+/**
+ * Whether the link carries its iteration count, as every link made by this
+ * version does. One that does not is either an older link or — much more
+ * likely — one cut short, since truncation removes the count first.
+ */
+export function hasIterationCount(dataParam) {
+  return typeof dataParam === 'string' && dataParam.split('.').length === 3;
+}
+
 /** Groups the code in two blocks so it is easier to read out: ABCD-EFGH. */
 export function formatShareCode(code) {
   return code.length === CODE_LENGTH
@@ -92,7 +101,8 @@ function normalizeShareCode(input) {
  * reopen would show the sender a code that does not belong to the link they
  * already sent, and the recipient would have no way to tell.
  *
- * Keyed by id + updatedAt so editing a card naturally retires its stale link.
+ * Keyed by id + updatedAt so editing a card naturally retires its stale link,
+ * and by whether the notes are included — those are two different links.
  * Memory only, never persisted: the code is the secret guarding a public
  * ciphertext, and writing it to disk would outlive the vault lock.
  */
@@ -103,12 +113,12 @@ export function clearShareLinks() {
   shareLinks.clear();
 }
 
-export async function getShareLink(card) {
-  const key = `${card.id}:${card.updatedAt ?? ''}`;
+export async function getShareLink(card, { includeNotes = false } = {}) {
+  const key = `${card.id}:${card.updatedAt ?? ''}:${includeNotes ? 'notes' : ''}`;
   const cached = shareLinks.get(key);
   if (cached) return cached;
 
-  const fresh = await encodeCardForShare(card);
+  const fresh = await encodeCardForShare(card, { includeNotes });
   shareLinks.set(key, fresh);
   return fresh;
 }
@@ -121,13 +131,15 @@ export async function getShareLink(card) {
  * Returns both the URL (salt + ciphertext, base64) and the code to share
  * out of band.
  */
-export async function encodeCardForShare(card) {
+export async function encodeCardForShare(card, { includeNotes = true } = {}) {
   const payload = {
     p: card.providerName,
     n: card.cardNumber,
     f: card.barcodeFormat,
     c: card.color,
-    t: card.notes || ''
+    // Notes are personal ("PIN 1234", "tessera di mamma"): they travel only
+    // when the sender says so.
+    t: includeNotes ? card.notes || '' : ''
   };
 
   const code = generateShareCode();

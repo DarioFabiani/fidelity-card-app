@@ -1,12 +1,12 @@
 import { route } from 'preact-router';
 import { useState } from 'preact/hooks';
-import { decodeSharedCard, isValidShareData } from '../utils/share';
+import { decodeSharedCard, isValidShareData, hasIterationCount } from '../utils/share';
 import { addCard, getAllCards } from '../db';
 import { BarcodeDisplay } from '../components/BarcodeDisplay';
 import { CardBanner } from '../components/CardBanner';
 import { PageMessage } from '../components/PageMessage';
 import { DEFAULT_CARD_COLOR } from '../utils/color';
-import { formatCardNumber, sameCardNumber } from '../utils/format';
+import { formatCardNumber, sameCardNumber, normalizeCardNumber } from '../utils/format';
 
 export function SharedCard({ data, showToast }) {
   const [code, setCode] = useState('');
@@ -31,6 +31,12 @@ export function SharedCard({ data, showToast }) {
     </div>
   );
 
+  // A link cut short by a chat app can still look well-formed; saying only
+  // "wrong code" sent the recipient re-typing a code that was right.
+  const wrongCodeMessage = hasIterationCount(data)
+    ? 'Codice errato. Controlla e riprova.'
+    : 'Codice errato, oppure il link è arrivato incompleto. Controlla il codice o chiedi di reinviare il link.';
+
   const handleUnlock = async (e) => {
     e.preventDefault();
     if (!code || unlocking) return;
@@ -47,10 +53,10 @@ export function SharedCard({ data, showToast }) {
           // Only the duplicate hint is lost.
         }
       } else {
-        setCodeError('Codice errato. Controlla e riprova.');
+        setCodeError(wrongCodeMessage);
       }
     } catch {
-      setCodeError('Codice errato. Controlla e riprova.');
+      setCodeError(wrongCodeMessage);
     } finally {
       setUnlocking(false);
     }
@@ -160,7 +166,7 @@ export function SharedCard({ data, showToast }) {
       />
 
       <div style={{ marginTop: 'var(--space-4)' }}>
-        <BarcodeDisplay value={card.cardNumber} format={card.barcodeFormat} fullscreenable={false} />
+        <BarcodeDisplay value={normalizeCardNumber(card.cardNumber)} format={card.barcodeFormat} fullscreenable={false} />
       </div>
 
       {card.notes && (

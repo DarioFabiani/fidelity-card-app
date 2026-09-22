@@ -1,4 +1,4 @@
-import { exportCards, importCards, listCardIds } from '../db';
+import { exportCards, importCards, listCardVersions, RAW_DUMP_FORMAT } from '../db';
 import { normalizeColor } from './color';
 import { normalizeFormat } from '../constants/barcodeFormats';
 import {
@@ -100,6 +100,31 @@ export async function downloadExport(password) {
 }
 
 /**
+ * Reads a parsed backup file of any kind this app writes: plain array,
+ * password-protected backup, or the raw copy saved from the recovery screen.
+ * Encrypted ones come back still sealed, with what decryptImport needs.
+ */
+export function parseBackup(parsed) {
+  if (parsed && parsed.format === RAW_DUMP_FORMAT) {
+    return parseRawDump(parsed);
+  }
+  if (parsed && parsed.encrypted) {
+    if (!parsed.salt || !parsed.data) throw new Error('File di backup corrotto');
+    return {
+      encrypted: true,
+      salt: parsed.salt,
+      data: parsed.data,
+      iterations: backupIterations(parsed.iterations)
+    };
+  }
+  if (Array.isArray(parsed) && parsed.some(r => r && r._enc)) {
+    // A raw copy from an older build: records only, no salt.
+    throw new Error('Questa copia non contiene i parametri di cifratura: non può essere decifrata');
+  }
+  return { encrypted: false, cards: validateCards(parsed) };
+}
+
+/**
  * Opens the file picker and parses the chosen backup. Encrypted backups are
  * returned undecrypted — the caller collects the password and calls
  * `decryptImport` — so the UI only asks for one when the file needs it.
@@ -141,18 +166,7 @@ export function pickImportFile() {
       const file = e.target.files[0];
       if (!file) return done(null);
       try {
-        const parsed = JSON.parse(await file.text());
-        if (parsed && parsed.encrypted) {
-          if (!parsed.salt || !parsed.data) throw new Error('File di backup corrotto');
-          done({
-            encrypted: true,
-            salt: parsed.salt,
-            data: parsed.data,
-            iterations: backupIterations(parsed.iterations)
-          });
-        } else {
-          done({ encrypted: false, cards: validateCards(parsed) });
-        }
+        done(parseBackup(JSON.parse(await file.text())));
       } catch (err) {
         fail(err instanceof SyntaxError ? new Error('Formato non valido') : err);
       }
@@ -173,8 +187,77 @@ export function backupIterations(value) {
   return value;
 }
 
+/** Plain fields of a raw record, as validateCards expects them. */
+function stripRaw(record) {
+  const { _enc, ...rest } = record;
+  return rest;
+}
+
+/**
+ * Reads the copy saved from the recovery screen. Records still in the clear
+ * import as they are; sealed ones need the password, like an encrypted backup.
+ */
+function parseRawDump(dump) {
+  if (!Array.isArray(dump.records)) throw new Error('File di backup corrotto');
+  const sealed = dump.records.filter(r => r && r._enc);
+  if (!sealed.length) {
+    return { encrypted: false, cards: validateCards(dump.records.map(stripRaw)) };
+  }
+  const enc = dump.encryption;
+  if (!enc || !enc.salt) {
+    throw new Error('Questa copia non contiene i parametri di cifratura: non può essere decifrata');
+  }
+  const paramSets = [enc, enc.pending].filter(p => p && p.salt).map(p => ({
+    salt: p.salt,
+    verifier: p.verifier || null,
+    iterations: backupIterations(p.iterations)
+  }));
+  return { encrypted: true, raw: true, paramSets, records: dump.records };
+}
+
+/**
+ * Decrypts a raw dump with `password`. Tries each set of key parameters it
+ * carries (current, and a key change that was in progress) and keeps the one
+ * that opens the records. Records that still cannot be read are left out.
+ */
+async function decryptRawDump(payload, password) {
+  for (const params of payload.paramSets) {
+    const key = await deriveKey(password, base64ToBuffer(params.salt), params.iterations);
+    if (params.verifier) {
+      try {
+        await decryptJSON(params.verifier, key);
+      } catch {
+        continue;
+      }
+    }
+    const cards = [];
+    let opened = 0;
+    for (const record of payload.records) {
+      if (!record || !record._enc) {
+        cards.push(stripRaw(record || {}));
+        continue;
+      }
+      try {
+        cards.push({ ...stripRaw(record), ...(await decryptJSON(record._enc, key)) });
+        opened++;
+      } catch {
+        // Unreadable under this key: left out.
+      }
+    }
+    if (opened > 0) return validateCards(cards);
+  }
+  return null;
+}
+
 /** Unseals an encrypted backup. Returns null when the password is wrong. */
 export async function decryptImport(payload, password) {
+  if (payload.raw) {
+    try {
+      return await decryptRawDump(payload, password);
+    } catch {
+      return null;
+    }
+  }
   try {
     const key = await deriveKey(password, base64ToBuffer(payload.salt), payload.iterations ?? LEGACY_PBKDF2_ITERATIONS);
     return validateCards(await decryptJSON(payload.data, key));
@@ -184,13 +267,32 @@ export async function decryptImport(payload, password) {
 }
 
 /**
- * Writes the imported cards, reporting how many replaced an existing card.
- * Import matches on id, so a backup silently overwrote anything edited since
- * it was taken — the counts at least make that visible.
+ * Decides what an import writes. Cards match on id; an existing card is only
+ * replaced by a copy edited more recently. Restoring an old backup used to
+ * overwrite, silently, every change made since it was taken — and re-importing
+ * the same file reported every card as "aggiornata".
  */
+export function planImport(cards, existingVersions) {
+  const toWrite = [];
+  let added = 0;
+  let updated = 0;
+  let kept = 0;
+  for (const card of cards) {
+    if (!existingVersions.has(card.id)) {
+      added++;
+      toWrite.push(card);
+    } else if (card.updatedAt > existingVersions.get(card.id)) {
+      updated++;
+      toWrite.push(card);
+    } else {
+      kept++;
+    }
+  }
+  return { toWrite, added, updated, kept };
+}
+
 export async function commitImport(cards) {
-  const existing = new Set((await listCardIds()));
-  const updated = cards.filter(c => existing.has(c.id)).length;
-  await importCards(cards);
-  return { added: cards.length - updated, updated };
+  const { toWrite, added, updated, kept } = planImport(cards, await listCardVersions());
+  if (toWrite.length) await importCards(toWrite);
+  return { added, updated, kept };
 }

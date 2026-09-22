@@ -120,6 +120,9 @@ export function App() {
   if (vaultError || showRecovery) {
     return (
       <VaultRecovery
+        // Reached on purpose from the unlock screen: nothing is broken, the
+        // user just does not have the password.
+        title={vaultError ? undefined : 'Password dimenticata?'}
         message={vaultError || 'Senza la password i dati cifrati non possono essere letti. Puoi salvarne una copia così come sono, oppure ripartire da zero.'}
         // Only offered when the user chose to come here: a real vault error
         // has nothing to go back to.

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
+import { useBackToClose } from '../hooks/useBackToClose';
 
 const ZXING_TO_APP_FORMAT = {
   [BarcodeFormat.CODE_128]: 'CODE128',
@@ -40,6 +41,8 @@ export function BarcodeScanner({ onDetected, onClose }) {
     onDetected(text, format);
   };
 
+  useBackToClose(true, onClose);
+
   // Escape closes the scanner on desktop.
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -66,6 +69,12 @@ export function BarcodeScanner({ onDetected, onClose }) {
     e.target.value = '';
     if (!file) return;
     setImageError('');
+    // A PDF or document chosen by mistake used to hang on "Lettura in
+    // corso..." for seconds before a generic failure.
+    if (file.type && !file.type.startsWith('image/')) {
+      setImageError('Il file scelto non è un\'immagine. Scegli una foto o uno screenshot del codice.');
+      return;
+    }
     setDecodingImage(true);
     const url = URL.createObjectURL(file);
     try {
@@ -119,9 +128,9 @@ export function BarcodeScanner({ onDetected, onClose }) {
 
   return (
     <div class="modal-overlay" onClick={onClose}>
-      <div class="modal-content scanner-content" onClick={e => e.stopPropagation()}>
+      <div class="modal-content scanner-content" role="dialog" aria-modal="true" aria-labelledby="scanner-title" onClick={e => e.stopPropagation()}>
         <div class="scanner-header">
-          <h3 class="scanner-title">Scansiona codice a barre</h3>
+          <h3 class="scanner-title" id="scanner-title">Scansiona codice a barre</h3>
           <button type="button" class="scanner-close" onClick={onClose} aria-label="Chiudi">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -177,7 +186,11 @@ export function BarcodeScanner({ onDetected, onClose }) {
           }
           .scanner-close {
             display: flex;
-            padding: 4px;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            margin: -8px -8px -8px 0;
             color: var(--color-text-secondary);
           }
           .scanner-video-wrap {

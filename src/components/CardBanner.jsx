@@ -44,6 +44,12 @@ export function CardBanner({ color, name, number, action }) {
           /* Keeps a long name from wrapping underneath the absolutely
              positioned star in the top-right corner. */
           padding: 0 40px;
+          /* A long name took five lines and pushed the barcode off screen. */
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          overflow-wrap: anywhere;
         }
         .card-banner-number {
           font-size: var(--text-sm);

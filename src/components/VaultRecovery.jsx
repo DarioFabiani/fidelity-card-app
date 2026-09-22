@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { dumpRawRecords, resetEverything } from '../db';
+import { dumpVault, resetEverything } from '../db';
 import { ConfirmDialog } from './ConfirmDialog';
 import { saveJsonFile } from '../utils/export-import';
 
@@ -12,7 +12,7 @@ import { saveJsonFile } from '../utils/export-import';
  * the user always has a copy in hand before being offered the destructive way
  * out.
  */
-export function VaultRecovery({ message, onCancel }) {
+export function VaultRecovery({ title = 'Impossibile leggere i dati', message, onCancel }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dumped, setDumped] = useState(false);
@@ -20,9 +20,8 @@ export function VaultRecovery({ message, onCancel }) {
   const handleDump = async () => {
     setBusy(true);
     try {
-      const records = await dumpRawRecords();
       saveJsonFile(
-        JSON.stringify(records, null, 2),
+        JSON.stringify(await dumpVault(), null, 2),
         `carte-fedelta-dati-grezzi-${new Date().toISOString().slice(0, 10)}.json`
       );
       setDumped(true);
@@ -39,7 +38,7 @@ export function VaultRecovery({ message, onCancel }) {
 
   return (
     <div class="page vault-recovery">
-      <h2 class="vault-recovery-title">Impossibile leggere i dati</h2>
+      <h2 class="vault-recovery-title">{title}</h2>
       <p class="vault-recovery-text">{message}</p>
 
       <div class="vault-recovery-actions">
@@ -47,8 +46,8 @@ export function VaultRecovery({ message, onCancel }) {
           Scarica una copia dei dati
         </button>
         <p class="vault-recovery-hint">
-          Salva i dati così come sono sul dispositivo, cifrati compresi. Non serve la password
-          e può tornare utile per recuperarli in seguito.
+          Salva i dati così come sono sul dispositivo, cifrati compresi. Non serve la password:
+          se in seguito te la ricordi, puoi reimportare il file da Impostazioni → Importa carte.
         </p>
 
         <button

@@ -11,7 +11,17 @@ export function SearchBar({ value, onInput }) {
         value={value}
         onInput={e => onInput(e.target.value)}
         class="search-input"
+        aria-label="Cerca carte"
       />
+      {value && (
+        // Explicit clear button: the native one of type=search is missing or
+        // tiny on several mobile browsers.
+        <button type="button" class="search-clear" onClick={() => onInput('')} aria-label="Cancella la ricerca">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      )}
       <style>{`
         .search-bar {
           position: relative;
@@ -39,14 +49,25 @@ export function SearchBar({ value, onInput }) {
             inset 0 1px 0 color-mix(in srgb, #FFFFFF 45%, transparent),
             var(--shadow-sm);
         }
+        .search-input {
+          padding-right: 48px;
+        }
         .search-input::-webkit-search-cancel-button {
           -webkit-appearance: none;
-          height: 16px;
-          width: 16px;
-          background: var(--color-text-secondary);
+          display: none;
+        }
+        .search-clear {
+          position: absolute;
+          right: 1px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 44px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--color-text-secondary);
           border-radius: 50%;
-          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='white' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E") center/contain no-repeat;
-          cursor: pointer;
         }
       `}</style>
     </div>

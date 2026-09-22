@@ -75,3 +75,28 @@ describe('legacy shared links', async () => {
     expect(isValidShareData('A'.repeat(24) + '.' + 'B'.repeat(60) + '.999999999')).toBe(false);
   });
 });
+
+describe('planImport', async () => {
+  const { planImport } = await import('../utils/export-import');
+  it('adds new cards, updates only with newer copies, keeps the rest', () => {
+    const existing = new Map([['a', 100], ['b', 100]]);
+    const plan = planImport([
+      { id: 'a', updatedAt: 50 },   // older backup copy: keep local
+      { id: 'b', updatedAt: 100 },  // same: nothing to do
+      { id: 'c', updatedAt: 10 }    // new
+    ], existing);
+    expect(plan.toWrite.map(c => c.id)).toEqual(['c']);
+    expect(plan).toMatchObject({ added: 1, updated: 0, kept: 2 });
+    expect(planImport([{ id: 'a', updatedAt: 200 }], existing)).toMatchObject({ updated: 1 });
+  });
+});
+
+describe('shared link notes', async () => {
+  const { encodeCardForShare, decodeSharedCard } = await import('../utils/share');
+  it('leaves the notes out unless asked', async () => {
+    const card = { providerName: 'Coop', cardNumber: '1', barcodeFormat: 'CODE128', color: '#A34F47', notes: 'PIN 1234' };
+    const { url, code } = await encodeCardForShare(card, { includeNotes: false });
+    const decoded = await decodeSharedCard(new URL(url).searchParams.get('data'), code);
+    expect(decoded.notes).toBe('');
+  });
+});

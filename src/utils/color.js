@@ -33,15 +33,30 @@ export function normalizeColor(value) {
 
 // Curated muted palette offered in the card form. Ordered by hue so the swatch
 // grid reads as a spectrum; all are dark enough for white text.
-export const CARD_COLORS = [
-  '#A34F47', // rosso mattone
-  '#A2663F', // terracotta
-  '#877033', // ocra
-  '#55805F', // salvia
-  '#467C7D', // verde acqua
-  '#4A6E92', // blu polvere
-  '#56618F', // indaco
-  '#6F5583', // prugna
-  '#97536B', // rosa antico
-  '#4A4F57'  // ardesia
-];
+export const CARD_COLOR_NAMES = {
+  '#A34F47': 'rosso mattone',
+  '#A2663F': 'terracotta',
+  '#877033': 'ocra',
+  '#55805F': 'salvia',
+  '#467C7D': 'verde acqua',
+  '#4A6E92': 'blu polvere',
+  '#56618F': 'indaco',
+  '#6F5583': 'prugna',
+  '#97536B': 'rosa antico',
+  '#4A4F57': 'ardesia'
+};
+
+export const CARD_COLORS = Object.keys(CARD_COLOR_NAMES);
+
+/**
+ * A palette colour picked from the shop name, for cards whose shop is not in
+ * the suggestions: they all came out the default blue, and a list of
+ * identical cards is hard to scan. Stable, so the same name keeps its colour.
+ */
+export function colorForName(name) {
+  const key = (name || '').trim().toLowerCase();
+  if (!key) return DEFAULT_CARD_COLOR;
+  let hash = 0;
+  for (const ch of key) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
+  return CARD_COLORS[hash % CARD_COLORS.length];
+}

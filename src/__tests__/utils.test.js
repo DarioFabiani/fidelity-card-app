@@ -84,3 +84,21 @@ describe('sameCardNumber', async () => {
     expect(sameCardNumber('123', '124')).toBe(false);
   });
 });
+
+describe('normalizeCardNumber', async () => {
+  const { normalizeCardNumber } = await import('../utils/format');
+  it('drops grouping spaces from digit-only numbers, trims the rest', () => {
+    expect(normalizeCardNumber(' 4006 3813 3393 1 ')).toBe('4006381333931');
+    expect(normalizeCardNumber('IK 55 66')).toBe('IK 55 66');
+    expect(normalizeCardNumber('  AB-1 ')).toBe('AB-1');
+  });
+});
+
+describe('colorForName', async () => {
+  const { colorForName, CARD_COLORS, DEFAULT_CARD_COLOR } = await import('../utils/color');
+  it('is stable, from the palette, and case-insensitive', () => {
+    expect(CARD_COLORS).toContain(colorForName('Bar Mario'));
+    expect(colorForName('Bar Mario')).toBe(colorForName('bar mario '));
+    expect(colorForName('')).toBe(DEFAULT_CARD_COLOR);
+  });
+});
