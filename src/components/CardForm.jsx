@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'preact/hooks';
+import { useState, useMemo, useRef, useLayoutEffect } from 'preact/hooks';
 import { PROVIDERS } from '../constants/providers';
 import { BARCODE_FORMATS, suggestFormat, isAlphanumericFormat } from '../constants/barcodeFormats';
 import { CARD_COLORS, CARD_COLOR_NAMES, DEFAULT_CARD_COLOR, colorForName } from '../utils/color';
@@ -54,7 +54,9 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
     cardNumber !== (initial?.cardNumber || '') ||
     notes !== (initial?.notes || '') ||
     (initial ? barcodeFormat !== (initial.barcodeFormat || 'CODE128') || color !== (initial.color || DEFAULT_CARD_COLOR) : false);
-  useEffect(() => { onDirtyChange?.(dirty); }, [dirty]);
+  // Layout effect: reported before the next paint, so a Back pressed right
+  // after typing is already guarded.
+  useLayoutEffect(() => { onDirtyChange?.(dirty); }, [dirty]);
 
   const duplicate = useMemo(
     () => existingCards.find(c => c.id !== initial?.id && !c._unreadable && sameCardNumber(c.cardNumber, cardNumber)),

@@ -43,9 +43,8 @@ export function EditCard({ id, showToast }) {
 
   const handleSubmit = async (data) => {
     await updateCard({ ...data, id });
-    guard.markSaved();
     showToast('Carta aggiornata!');
-    returnToCard(id);
+    await guard.leaveAfterSave(() => returnToCard(id));
   };
 
   if (loading) {

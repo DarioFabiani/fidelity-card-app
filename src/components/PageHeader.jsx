@@ -21,8 +21,8 @@ export function PageHeader({ title, onBack }) {
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 40px;
-          height: 40px;
+          width: 44px;
+          height: 44px;
           flex-shrink: 0;
           border-radius: 50%;
           color: var(--color-text);

@@ -35,7 +35,7 @@ export function ShareModal({ card, onClose, showToast }) {
         import('qrcode').then(({ default: QRCode }) => {
           if (cancelled || !canvasRef.current) return;
           QRCode.toCanvas(canvasRef.current, url, {
-            width: 220,
+            width: 180,
             margin: 2,
             color: { dark: '#000000', light: '#FFFFFF' }
           });

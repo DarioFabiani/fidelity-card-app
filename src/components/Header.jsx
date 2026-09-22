@@ -72,6 +72,7 @@ export function Header({ onLock }) {
           padding: 0 var(--space-4);
         }
         .header-title {
+          min-height: 44px;
           font-size: var(--text-lg);
           font-weight: 700;
           letter-spacing: -0.01em;

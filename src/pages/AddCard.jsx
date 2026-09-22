@@ -12,11 +12,10 @@ export function AddCard({ showToast }) {
 
   const handleSubmit = async (data) => {
     const card = await add(data);
-    guard.markSaved();
     showToast('Carta aggiunta!');
     // Straight to the new card, so the barcode can be checked right away.
     // Replacing the form in history keeps Back from returning to it.
-    route(`/fidelity-card-app/card/${card.id}`, true);
+    await guard.leaveAfterSave(() => route(`/fidelity-card-app/card/${card.id}`, true));
   };
 
   return (

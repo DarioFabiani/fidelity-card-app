@@ -10,7 +10,7 @@ export function CardBanner({ color, name, number, action }) {
   return (
     <div class="card-banner" style={{ background: cardGradient(color), color: getContrastColor(color) }}>
       {action}
-      <h2 class="card-banner-name">{name}</h2>
+      <h2 class="card-banner-name" title={name}>{name}</h2>
       <p class="card-banner-number">{number}</p>
       <style>{`
         .card-banner {
@@ -46,7 +46,7 @@ export function CardBanner({ color, name, number, action }) {
           padding: 0 40px;
           /* A long name took five lines and pushed the barcode off screen. */
           display: -webkit-box;
-          -webkit-line-clamp: 2;
+          -webkit-line-clamp: 3;
           -webkit-box-orient: vertical;
           overflow: hidden;
           overflow-wrap: anywhere;

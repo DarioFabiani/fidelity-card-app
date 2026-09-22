@@ -107,8 +107,10 @@ export function BarcodeDisplay({ value, format = 'CODE128', fullscreenable = tru
         .barcode-qr {
           max-width: 240px;
         }
+        /* !important: the qrcode library writes an inline pixel width. */
         .barcode-fullscreen .barcode-qr {
-          width: min(88vw, 70vh);
+          width: min(88vw, 70vh) !important;
+          height: auto !important;
           max-width: none;
         }
         .barcode-error {
