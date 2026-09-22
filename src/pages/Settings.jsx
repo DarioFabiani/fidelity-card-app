@@ -192,7 +192,7 @@ export function Settings({ showToast }) {
           description="Scegli una master password. Verrà usata per cifrare i dati delle carte sul dispositivo (AES-256-GCM) e non viene mai salvata: se la dimentichi non potrai più recuperare i dati cifrati."
           submitLabel="Attiva cifratura"
           withConfirm
-          minLength={6}
+          minLength={8}
           onClose={() => setShowSetup(false)}
           onSubmit={async (password) => {
             try {
@@ -217,7 +217,7 @@ export function Settings({ showToast }) {
           withCurrent
           withConfirm
           newPasswordLabel="Nuova password"
-          minLength={6}
+          minLength={8}
           onClose={() => setShowChangePassword(false)}
           onSubmit={async (password, current) => {
             if (password === current) return 'La nuova password è uguale a quella attuale';
@@ -239,7 +239,7 @@ export function Settings({ showToast }) {
           description="Il file di backup lascia il dispositivo, quindi viene cifrato con una password. Può essere la stessa master password o un'altra: ti servirà per reimportarlo."
           submitLabel="Esporta"
           withConfirm
-          minLength={6}
+          minLength={8}
           onClose={() => setAskExportPassword(false)}
           onSubmit={async (password) => {
             setAskExportPassword(false);

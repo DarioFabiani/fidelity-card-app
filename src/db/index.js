@@ -53,6 +53,11 @@ function clearEncryptionKey() {
  * unlock, say) could each promote their own salt over cards sealed by the
  * other. Where the Web Locks API is missing, runs unguarded.
  */
+//
+// Card writes take it too: a card saved or imported in one tab while another
+// re-keys would be sealed with the old key after the re-sealed set was read,
+// and end up unreadable. Nothing that holds the lock calls these writers, so
+// the lock is never requested twice by the same chain.
 function withVaultLock(fn) {
   const locks = globalThis.navigator?.locks;
   return locks ? locks.request('fidelity-vault', fn) : fn();
@@ -248,7 +253,11 @@ export async function getCard(id) {
   }
 }
 
-export async function addCard(card) {
+export function addCard(card) {
+  return withVaultLock(() => addCardHoldingLock(card));
+}
+
+async function addCardHoldingLock(card) {
   const db = await getDB();
   const now = Date.now();
   const newCard = {
@@ -271,7 +280,11 @@ export async function addCard(card) {
   return newCard;
 }
 
-export async function updateCard(card) {
+export function updateCard(card) {
+  return withVaultLock(() => updateCardHoldingLock(card));
+}
+
+async function updateCardHoldingLock(card) {
   if (card._unreadable) throw new Error('Carta non leggibile: modifica rifiutata');
   const db = await getDB();
   const existingRaw = await db.get(STORE_NAME, card.id);
@@ -369,7 +382,11 @@ export async function dumpVault() {
  * Wipes every card and all encryption settings. Last resort for a vault stuck
  * in an unopenable state — destructive, so only ever behind a confirmation.
  */
-export async function resetEverything() {
+export function resetEverything() {
+  return withVaultLock(() => resetEverythingHoldingLock());
+}
+
+async function resetEverythingHoldingLock() {
   const db = await getDB();
   const tx = db.transaction(STORE_NAME, 'readwrite');
   await tx.store.clear();
@@ -378,22 +395,47 @@ export async function resetEverything() {
   clearEncryptionKey();
 }
 
-export async function deleteCard(id) {
+export function deleteCard(id) {
+  return withVaultLock(() => deleteCardHoldingLock(id));
+}
+
+async function deleteCardHoldingLock(id) {
   const db = await getDB();
   await db.delete(STORE_NAME, id);
 }
 
 /**
- * id -> updatedAt of every stored card (both in the clear, no key needed), so
- * an import can tell new cards from newer and older copies of existing ones.
+ * id -> updatedAt of every stored card (both in the clear), so an import can
+ * tell new cards from newer and older copies of existing ones. A record that
+ * cannot be decrypted maps to -Infinity: any copy from a backup beats it —
+ * repairing such a card is exactly what a backup is for, and comparing its
+ * clear-text date kept the broken record over a good copy.
  */
 export async function listCardVersions() {
   const db = await getDB();
   const raw = await db.getAll(STORE_NAME);
-  return new Map(raw.map(r => [r.id, Number.isFinite(r.updatedAt) ? r.updatedAt : 0]));
+  const versions = new Map();
+  for (const r of raw) {
+    let readable = true;
+    // Without the key nothing can be judged: treat the card as readable
+    // rather than let an import overwrite every sealed record.
+    if (r._enc && encryptionKey) {
+      try {
+        await decryptCardWith(r, encryptionKey);
+      } catch {
+        readable = false;
+      }
+    }
+    versions.set(r.id, readable ? (Number.isFinite(r.updatedAt) ? r.updatedAt : 0) : -Infinity);
+  }
+  return versions;
 }
 
-export async function importCards(cards) {
+export function importCards(cards) {
+  return withVaultLock(() => importCardsHoldingLock(cards));
+}
+
+async function importCardsHoldingLock(cards) {
   // Last line of defence: a record carrying `_enc` from outside would look
   // like ciphertext this device has no key for, and lock the whole vault.
   if (cards.some(c => c && c._enc)) {

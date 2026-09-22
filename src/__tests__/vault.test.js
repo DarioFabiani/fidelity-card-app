@@ -206,3 +206,21 @@ describe('recovery copy', () => {
     expect(() => parseBackup([{ id: 'x', _enc: 'abc' }])).toThrow(/parametri di cifratura/);
   });
 });
+
+describe('backup repairs', () => {
+  it('restores a card whose stored copy became unreadable', async () => {
+    await seed();
+    await db.enableEncryption('vecchia1');
+    const { cards } = await db.exportCards();
+    const { openDB } = await import('idb');
+    const idb = await openDB('fidelity-cards-db', 1);
+    const [first] = await idb.getAll('cards');
+    await idb.put('cards', { ...first, _enc: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' });
+    idb.close();
+    expect((await db.getAllCards()).filter(c => c._unreadable)).toHaveLength(1);
+
+    const { commitImport } = await import('../utils/export-import');
+    expect(await commitImport(cards)).toMatchObject({ updated: 1, kept: 1 });
+    expect((await db.getAllCards()).filter(c => c._unreadable)).toHaveLength(0);
+  });
+});

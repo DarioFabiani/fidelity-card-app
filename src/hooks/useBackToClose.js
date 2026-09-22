@@ -23,6 +23,11 @@ export function useBackToClose(active, onClose) {
   // page with the overlay still open.
   useLayoutEffect(() => {
     if (!active) return;
+    // Chrome skips history entries pushed without a user gesture when going
+    // Back, so such an entry would not catch Back and could even make one
+    // press leave two entries. An overlay opened with no gesture (the
+    // password prompt after a file picker) is simply left to Back as before.
+    if (navigator.userActivation && !navigator.userActivation.isActive) return;
     const id = `overlay-${++nextId}`;
     window.history.pushState({ ...(window.history.state || {}), overlay: id }, '', window.location.href);
     let poppedByBack = false;

@@ -42,7 +42,12 @@ export function validateCards(cards) {
       logoUrl: card.logoUrl ? String(card.logoUrl) : '',
       favorite: card.favorite === true,
       createdAt: Number.isFinite(card.createdAt) ? card.createdAt : now,
-      updatedAt: Number.isFinite(card.updatedAt) ? card.updatedAt : now,
+      // A card with no modification date (hand-made or foreign file) must
+      // not count as "newest" and overwrite a card edited here: it falls back
+      // to its creation date, or 0.
+      updatedAt: Number.isFinite(card.updatedAt)
+        ? card.updatedAt
+        : Number.isFinite(card.createdAt) ? card.createdAt : 0,
       ...(Number.isFinite(card.lastUsedAt) ? { lastUsedAt: card.lastUsedAt } : {})
     };
   });

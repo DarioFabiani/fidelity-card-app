@@ -100,3 +100,37 @@ describe('shared link notes', async () => {
     expect(decoded.notes).toBe('');
   });
 });
+
+describe('share link details', async () => {
+  const { getShareLink, isValidShareData, decodeSharedCard } = await import('../utils/share');
+
+  it('keeps the same code with and without notes', async () => {
+    const card = { id: 'z', updatedAt: 1, providerName: 'Coop', cardNumber: '1', barcodeFormat: 'CODE128', color: '#A34F47', notes: 'n' };
+    const a = await getShareLink(card, { includeNotes: false });
+    const b = await getShareLink(card, { includeNotes: true });
+    expect(a.url).not.toBe(b.url);
+    expect(a.code).toBe(b.code);
+    const data = new URL(a.url).searchParams.get('data');
+    expect(await decodeSharedCard(data, b.code)).not.toBeNull();
+  });
+
+  it('rejects a count cut short by one digit', async () => {
+    const card = { id: 'y', updatedAt: 1, providerName: 'Coop', cardNumber: '1', barcodeFormat: 'CODE128', color: '#A34F47' };
+    const data = new URL((await getShareLink(card)).url).searchParams.get('data');
+    expect(isValidShareData(data)).toBe(true);
+    expect(isValidShareData(data.slice(0, -1))).toBe(false);
+  });
+});
+
+describe('import against unreadable and undated cards', async () => {
+  const { planImport, validateCards } = await import('../utils/export-import');
+  it('lets any backup copy replace an unreadable record', () => {
+    const plan = planImport([{ id: 'a', updatedAt: 0 }], new Map([['a', -Infinity]]));
+    expect(plan).toMatchObject({ updated: 1, kept: 0 });
+  });
+  it('does not let a card without dates overwrite a local one', () => {
+    const [card] = validateCards([{ id: 'a', providerName: 'X', cardNumber: '1' }]);
+    expect(card.updatedAt).toBe(0);
+    expect(planImport([card], new Map([['a', 5]]))).toMatchObject({ kept: 1 });
+  });
+});

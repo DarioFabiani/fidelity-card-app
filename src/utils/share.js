@@ -50,10 +50,11 @@ function fromBase64Url(value) {
 }
 
 // A link is `salt.sealed.iterations`. Links made before the count was part
-// of it are `salt.sealed` and used the legacy count. The bounds keep a
-// hand-crafted link from freezing the page on key derivation.
-const MIN_LINK_ITERATIONS = 10000;
-const MAX_LINK_ITERATIONS = 5000000;
+// of it are `salt.sealed` and used the legacy count. Only counts this app has
+// actually written are accepted: a range let a link cut short by one digit
+// (".600000" -> ".60000") pass as valid and fail as "wrong code", and it kept
+// a hand-crafted link from freezing the page with a huge count.
+const LINK_ITERATIONS = [PBKDF2_ITERATIONS];
 
 /** Splits a data param into its parts, or null if it has no valid shape. */
 function parseShareData(dataParam) {
@@ -66,7 +67,7 @@ function parseShareData(dataParam) {
   if (parts.length === 3) {
     if (!/^[0-9]+$/.test(count)) return null;
     iterations = Number(count);
-    if (iterations < MIN_LINK_ITERATIONS || iterations > MAX_LINK_ITERATIONS) return null;
+    if (!LINK_ITERATIONS.includes(iterations)) return null;
   }
   return { salt, sealed, iterations };
 }
@@ -107,18 +108,25 @@ function normalizeShareCode(input) {
  * ciphertext, and writing it to disk would outlive the vault lock.
  */
 const shareLinks = new Map();
+// One code per card version, shared by the links with and without notes:
+// ticking "Includi le note" after copying the first link used to show a new
+// code, and the one already dictated no longer opened the link already sent.
+const shareCodes = new Map();
 
 /** Forgets every code handed out: called when the vault locks. */
 export function clearShareLinks() {
   shareLinks.clear();
+  shareCodes.clear();
 }
 
 export async function getShareLink(card, { includeNotes = false } = {}) {
-  const key = `${card.id}:${card.updatedAt ?? ''}:${includeNotes ? 'notes' : ''}`;
+  const version = `${card.id}:${card.updatedAt ?? ''}`;
+  const key = `${version}:${includeNotes ? 'notes' : ''}`;
   const cached = shareLinks.get(key);
   if (cached) return cached;
 
-  const fresh = await encodeCardForShare(card, { includeNotes });
+  if (!shareCodes.has(version)) shareCodes.set(version, generateShareCode());
+  const fresh = await encodeCardForShare(card, { includeNotes, code: shareCodes.get(version) });
   shareLinks.set(key, fresh);
   return fresh;
 }
@@ -131,7 +139,7 @@ export async function getShareLink(card, { includeNotes = false } = {}) {
  * Returns both the URL (salt + ciphertext, base64) and the code to share
  * out of band.
  */
-export async function encodeCardForShare(card, { includeNotes = true } = {}) {
+export async function encodeCardForShare(card, { includeNotes = true, code = generateShareCode() } = {}) {
   const payload = {
     p: card.providerName,
     n: card.cardNumber,
@@ -142,7 +150,8 @@ export async function encodeCardForShare(card, { includeNotes = true } = {}) {
     t: includeNotes ? card.notes || '' : ''
   };
 
-  const code = generateShareCode();
+  // Fresh salt every time, so two links sharing a code still get
+  // independent keys.
   const salt = generateSalt();
   const key = await deriveKey(code, salt, PBKDF2_ITERATIONS);
   const sealed = await encryptJSON(payload, key);

@@ -48,6 +48,7 @@ export function VaultRecovery({ title = 'Impossibile leggere i dati', message, o
         <p class="vault-recovery-hint">
           Salva i dati così come sono sul dispositivo, cifrati compresi. Non serve la password:
           se in seguito te la ricordi, puoi reimportare il file da Impostazioni → Importa carte.
+          Custodiscilo con cura: chi lo ottiene può provare a indovinare la password.
         </p>
 
         <button
