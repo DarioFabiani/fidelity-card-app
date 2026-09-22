@@ -1,10 +1,14 @@
 import Router from 'preact-router';
-import { useState, useCallback, useEffect } from 'preact/hooks';
+import { useState, useCallback, useEffect, useRef } from 'preact/hooks';
 import { Header } from './components/Header';
 import { Toast } from './components/Toast';
 import { UnlockScreen } from './components/UnlockScreen';
 import { VaultRecovery } from './components/VaultRecovery';
-import { isEncryptionEnabled, hasEncryptionKey, repairEncryptionState, ENC_ENABLED_KEY } from './db';
+import { UpdateBanner } from './components/UpdateBanner';
+import { isEncryptionEnabled, hasEncryptionKey, repairEncryptionState, lock, ENC_ENABLED_KEY } from './db';
+import { clearShareLinks } from './utils/share';
+import { shouldAutoLock } from './utils/autolock';
+import { onUpdateReady, applyUpdate } from './utils/pwa';
 import { Home } from './pages/Home';
 import { AddCard } from './pages/AddCard';
 import { EditCard } from './pages/EditCard';
@@ -54,6 +58,39 @@ export function App() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
+  const [updateReady, setUpdateReady] = useState(false);
+  useEffect(() => onUpdateReady(() => setUpdateReady(true)), []);
+
+  // Drops the key and every share code derived while unlocked. The data on
+  // disk is untouched; the router unmounts, so no page keeps decrypted cards
+  // on screen behind the unlock form.
+  const lockVault = useCallback(() => {
+    lock();
+    clearShareLinks();
+    setUnlocked(false);
+  }, []);
+
+  // Auto-lock: the key otherwise stayed in memory for as long as the app was
+  // alive — on a phone, often days — so a vault "protected by password" was
+  // open to anyone who picked up the phone. Measured on the way back to the
+  // foreground, since timers are not reliable in a backgrounded tab.
+  const hiddenAt = useRef(null);
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt.current = Date.now();
+        return;
+      }
+      const since = hiddenAt.current;
+      hiddenAt.current = null;
+      if (since !== null && isEncryptionEnabled() && hasEncryptionKey() && shouldAutoLock(Date.now() - since)) {
+        lockVault();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [lockVault]);
+
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
   }, []);
@@ -83,7 +120,10 @@ export function App() {
 
   return (
     <>
-      <Header />
+      <Header onLock={isEncryptionEnabled() ? lockVault : undefined} />
+      {updateReady && (
+        <UpdateBanner onUpdate={applyUpdate} onDismiss={() => setUpdateReady(false)} />
+      )}
       <Router>
         <Home path="/fidelity-card-app/" showToast={showToast} />
         <AddCard path="/fidelity-card-app/add" showToast={showToast} />

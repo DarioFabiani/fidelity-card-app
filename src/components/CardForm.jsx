@@ -1,9 +1,17 @@
-import { useState } from 'preact/hooks';
+import { useState, useMemo } from 'preact/hooks';
 import { PROVIDERS } from '../constants/providers';
-import { BARCODE_FORMATS, suggestFormat } from '../constants/barcodeFormats';
+import { BARCODE_FORMATS, suggestFormat, isAlphanumericFormat } from '../constants/barcodeFormats';
 import { CARD_COLORS, DEFAULT_CARD_COLOR } from '../utils/color';
+import { foldText } from '../hooks/useSearch';
+import { sameCardNumber } from '../utils/format';
+import { BarcodeDisplay } from './BarcodeDisplay';
 
-export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
+/**
+ * `existingCards` (optional) lets the form warn about a card already saved
+ * with the same number — the usual way to end up with duplicates is saving a
+ * card someone shared, or re-adding one after forgetting it was there.
+ */
+export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCards = [] }) {
   const [providerName, setProviderName] = useState(initial?.providerName || '');
   const [cardNumber, setCardNumber] = useState(initial?.cardNumber || '');
   const [barcodeFormat, setBarcodeFormat] = useState(initial?.barcodeFormat || 'CODE128');
@@ -17,10 +25,19 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [ScannerComponent, setScannerComponent] = useState(null);
   const [scannerError, setScannerError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+
+  const duplicate = useMemo(
+    () => existingCards.find(c => c.id !== initial?.id && !c._unreadable && sameCardNumber(c.cardNumber, cardNumber)),
+    [existingCards, cardNumber, initial]
+  );
 
   const handleScanned = (text, format) => {
     setCardNumber(text);
     setBarcodeFormat(format);
+    // The scanner read the real format off the card: don't let a later
+    // correction to the number re-guess it.
+    setFormatPickedByUser(true);
     setScannerOpen(false);
   };
 
@@ -44,8 +61,8 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   const handleProviderInput = (value) => {
     setProviderName(value);
     if (value.length >= 1) {
-      const q = value.toLowerCase();
-      const matches = PROVIDERS.filter(p => p.name.toLowerCase().includes(q));
+      const q = foldText(value);
+      const matches = PROVIDERS.filter(p => foldText(p.name).includes(q));
       setSuggestions(matches.slice(0, 5));
     } else {
       setSuggestions([]);
@@ -73,8 +90,9 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!providerName.trim() || !cardNumber.trim()) return;
+    if (!providerName.trim() || !cardNumber.trim() || submitting) return;
     setSubmitting(true);
+    setSubmitError('');
     try {
       await onSubmit({
         providerName: providerName.trim(),
@@ -83,6 +101,11 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
         color,
         notes: notes.trim()
       });
+    } catch (err) {
+      // Without this a failed write left the button spinning back to its
+      // label with no word on why nothing happened — and what was typed
+      // looked saved.
+      setSubmitError(err?.message ? `Salvataggio non riuscito: ${err.message}` : 'Salvataggio non riuscito. Riprova.');
     } finally {
       setSubmitting(false);
     }
@@ -124,7 +147,13 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
             onInput={e => handleCardNumberInput(e.target.value)}
             placeholder="Numero o codice a barre"
             required
-            inputMode="numeric"
+            // Digits-only keypad for EAN/UPC/ITF; the full keyboard where the
+            // format allows letters, or once the number already has some —
+            // the numeric keypad made codes like "IK-123" impossible to type.
+            inputMode={isAlphanumericFormat(barcodeFormat) || /[^0-9\s]/.test(cardNumber) ? 'text' : 'numeric'}
+            autoCapitalize="characters"
+            autoComplete="off"
+            spellcheck={false}
           />
           <button
             type="button"
@@ -142,6 +171,12 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
       </div>
 
       {scannerError && <p class="scan-error">{scannerError}</p>}
+
+      {duplicate && (
+        <p class="form-warning">
+          Hai già una carta con questo numero: <strong>{duplicate.providerName}</strong>.
+        </p>
+      )}
 
       {scannerOpen && ScannerComponent && (
         <ScannerComponent
@@ -163,6 +198,13 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
           ))}
         </select>
       </div>
+
+      {cardNumber.trim() && (
+        <div class="form-group">
+          <span class="label-caps form-label">Anteprima</span>
+          <BarcodeDisplay value={cardNumber.trim()} format={barcodeFormat} fullscreenable={false} compact />
+        </div>
+      )}
 
       <div class="form-group">
         <label class="label-caps form-label">Colore carta</label>
@@ -197,6 +239,8 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
           rows={3}
         />
       </div>
+
+      {submitError && <p class="scan-error" role="alert">{submitError}</p>}
 
       <button type="submit" class="btn btn-primary btn-block" disabled={submitting}>
         {submitting ? 'Salvataggio...' : submitLabel}
@@ -242,6 +286,14 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
         .scan-error {
           font-size: var(--text-sm);
           color: var(--color-danger);
+        }
+        .form-warning {
+          font-size: var(--text-sm);
+          margin-top: -12px;
+          padding: var(--space-2) var(--space-3);
+          border-left: 3px solid var(--color-accent);
+          background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+          border-radius: 4px;
         }
         .suggestions {
           position: absolute;

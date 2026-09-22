@@ -7,3 +7,9 @@ export function formatCardNumber(num) {
   if (num.length <= 8) return num;
   return num.replace(/([0-9]{4})/g, '$1 ').trim();
 }
+
+/** Same card number, ignoring the spaces and dashes people type in. */
+export function sameCardNumber(a, b) {
+  const clean = v => (v || '').replace(/[\s-]/g, '').toUpperCase();
+  return clean(a) !== '' && clean(a) === clean(b);
+}

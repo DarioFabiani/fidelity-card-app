@@ -22,6 +22,15 @@ export function cardGradient(hex) {
 
 export const DEFAULT_CARD_COLOR = '#4A6E92';
 
+/**
+ * Colours arrive from backups and shared links, i.e. from outside. Anything
+ * but #RRGGBB would turn the gradient maths into "#NaNNaN..." and leave the
+ * card with no background at all.
+ */
+export function normalizeColor(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : DEFAULT_CARD_COLOR;
+}
+
 // Curated muted palette offered in the card form. Ordered by hue so the swatch
 // grid reads as a spectrum; all are dark enough for white text.
 export const CARD_COLORS = [

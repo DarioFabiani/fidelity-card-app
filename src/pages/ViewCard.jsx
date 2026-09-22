@@ -1,6 +1,6 @@
 import { route } from 'preact-router';
 import { useState, useEffect } from 'preact/hooks';
-import { getCard, deleteCard, toggleFavorite } from '../db';
+import { getCard, deleteCard, toggleFavorite, touchCard } from '../db';
 import { BarcodeDisplay } from '../components/BarcodeDisplay';
 import { CardBanner } from '../components/CardBanner';
 import { ShareModal } from '../components/ShareModal';
@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PageMessage } from '../components/PageMessage';
 import { DEFAULT_CARD_COLOR } from '../utils/color';
 import { formatCardNumber } from '../utils/format';
+import { copyToClipboard } from '../utils/share';
 import { StarIcon, ShareIcon, BackArrowIcon } from '../components/icons';
 
 export function ViewCard({ id, showToast }) {
@@ -20,7 +21,11 @@ export function ViewCard({ id, showToast }) {
     // Without the catch a rejected read would leave the page stuck on
     // "Caricamento..." forever instead of reporting the problem.
     getCard(id)
-      .then(setCard)
+      .then(found => {
+        setCard(found);
+        // Feeds the "Recenti" ordering on the list.
+        if (found && !found._unreadable) touchCard(id);
+      })
       .catch(() => setCard(null))
       .finally(() => setLoading(false));
   }, [id]);
@@ -76,16 +81,32 @@ export function ViewCard({ id, showToast }) {
   }, []);
 
   const handleToggleFavorite = async () => {
-    const updated = await toggleFavorite(id);
-    setCard(updated);
-    showToast(updated.favorite ? 'Aggiunta ai preferiti' : 'Rimossa dai preferiti');
+    try {
+      const updated = await toggleFavorite(id);
+      setCard(updated);
+      showToast(updated.favorite ? 'Aggiunta ai preferiti' : 'Rimossa dai preferiti');
+    } catch {
+      showToast('Impossibile aggiornare i preferiti', 'error');
+    }
   };
 
   const handleDelete = async () => {
     setConfirmDelete(false);
-    await deleteCard(id);
+    try {
+      await deleteCard(id);
+    } catch {
+      showToast('Errore nell\'eliminazione', 'error');
+      return;
+    }
     showToast('Carta eliminata');
-    route('/fidelity-card-app/');
+    // Replace: Back must not land on a card that no longer exists.
+    route('/fidelity-card-app/', true);
+  };
+
+  // Online checkouts and apps ask for the number typed in, not scanned.
+  const handleCopyNumber = async () => {
+    const ok = await copyToClipboard(card.cardNumber);
+    showToast(ok ? 'Numero copiato' : 'Errore nella copia', ok ? 'success' : 'error');
   };
 
   if (loading) {
@@ -163,6 +184,13 @@ export function ViewCard({ id, showToast }) {
         <BarcodeDisplay value={card.cardNumber} format={card.barcodeFormat} />
       </div>
 
+      <button class="view-copy" onClick={handleCopyNumber}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+        Copia numero
+      </button>
+
       {card.notes && (
         <div class="view-card-notes">
           <span class="label-caps view-card-notes-label">Note</span>
@@ -214,6 +242,21 @@ export function ViewCard({ id, showToast }) {
         .view-back:active {
           opacity: 0.6;
         }
+        .view-copy {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: var(--space-2);
+          margin: var(--space-2) auto 0;
+          padding: var(--space-2) var(--space-3);
+          font-size: var(--text-sm);
+          font-weight: 600;
+          color: var(--color-primary);
+          -webkit-tap-highlight-color: transparent;
+        }
+        .view-copy:active {
+          opacity: 0.6;
+        }
         .view-card-notes {
           margin-top: var(--space-4);
           padding: var(--space-4);
@@ -227,6 +270,9 @@ export function ViewCard({ id, showToast }) {
         .view-card-notes p {
           margin-top: var(--space-1);
           font-size: var(--text-sm);
+          /* Keeps the line breaks typed in the form. */
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
         }
         .view-card-actions {
           display: flex;

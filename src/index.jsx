@@ -1,6 +1,7 @@
 import { render } from 'preact';
 import { App } from './app';
 import './app.css';
+import { initServiceWorker } from './utils/pwa';
 
 /*
  * preact-router runs decodeURIComponent over the query string, which throws on
@@ -31,22 +32,15 @@ sanitizeMalformedQuery();
 render(<App />, document.getElementById('app'));
 
 /*
- * The service worker updates itself (registerType: 'autoUpdate'), which means
- * a tab left open across a deploy keeps running the old build while the new
- * one takes over the cache. Any chunk that tab has not loaded yet — the
- * barcode renderer, the scanner — is then gone: its hashed filename is no
- * longer on the server and the old precache has been cleaned up.
+ * The service worker used to update itself and reload the tab on its own
+ * (registerType 'autoUpdate'). That kept the tab on a consistent build, but
+ * the reload could land at any moment: in the middle of showing a barcode at
+ * the till, over a half-filled form, or — with encryption on — dropping the
+ * key and asking for the password right there.
  *
- * Reloading once, when the new worker takes control, puts the tab back on a
- * consistent build. The guard is there because controllerchange also fires the
- * first time a worker claims the page, and reloading in a loop would be worse
- * than the problem.
+ * Now a new build waits (registerType 'prompt'): the old worker keeps serving
+ * the old build's files, so lazily loaded chunks stay reachable, and the app
+ * offers "Aggiorna" instead. The new build also takes over by itself the next
+ * time every window of the app is closed.
  */
-if ('serviceWorker' in navigator) {
-  let reloading = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading) return;
-    reloading = true;
-    window.location.reload();
-  });
-}
+initServiceWorker();

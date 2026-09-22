@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { dumpRawRecords, resetEverything } from '../db';
 import { ConfirmDialog } from './ConfirmDialog';
+import { saveJsonFile } from '../utils/export-import';
 
 /**
  * Shown when the vault cannot be opened at all. Without this the error screen
@@ -20,13 +21,10 @@ export function VaultRecovery({ message, onCancel }) {
     setBusy(true);
     try {
       const records = await dumpRawRecords();
-      const blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `carte-fedelta-dati-grezzi-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      saveJsonFile(
+        JSON.stringify(records, null, 2),
+        `carte-fedelta-dati-grezzi-${new Date().toISOString().slice(0, 10)}.json`
+      );
       setDumped(true);
     } finally {
       setBusy(false);

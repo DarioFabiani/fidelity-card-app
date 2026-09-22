@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { PasswordPrompt } from '../components/PasswordPrompt';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LockIcon } from '../components/icons';
+import { AUTOLOCK_OPTIONS, getAutoLockMinutes, setAutoLockMinutes } from '../utils/autolock';
 
 function importSummary({ added, updated }) {
   const parts = [];
@@ -22,6 +23,7 @@ export function Settings({ showToast }) {
   const [confirmDisable, setConfirmDisable] = useState(false);
   const [askExportPassword, setAskExportPassword] = useState(false);
   const [pendingImport, setPendingImport] = useState(null);
+  const [autoLock, setAutoLock] = useState(getAutoLockMinutes);
 
   const runExport = async (password) => {
     setExporting(true);
@@ -132,12 +134,33 @@ export function Settings({ showToast }) {
             <LockIcon size={20} />
           </button>
         )}
+
+        {encryptionEnabled && (
+          <label class="settings-item settings-select">
+            <div class="settings-item-content">
+              <span class="settings-item-label">Blocco automatico</span>
+              <span class="settings-item-desc">Chiede di nuovo la password dopo che l'app è rimasta in background</span>
+            </div>
+            <select
+              value={autoLock}
+              onChange={e => {
+                const minutes = Number(e.target.value);
+                setAutoLock(minutes);
+                setAutoLockMinutes(minutes);
+              }}
+            >
+              {AUTOLOCK_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div class="settings-section">
         <h3 class="label-caps settings-section-title">Info</h3>
         <div class="settings-about">
-          <p><strong>Carte Fedeltà</strong> v1.0.0</p>
+          <p><strong>Carte Fedeltà</strong> v{__APP_VERSION__}</p>
           <p>Gestisci le tue carte fedeltà dal telefono.</p>
           <p>
             {encryptionEnabled
@@ -240,6 +263,15 @@ export function Settings({ showToast }) {
           display: flex;
           flex-direction: column;
           gap: 2px;
+        }
+        .settings-select {
+          flex-wrap: wrap;
+          gap: var(--space-3);
+          cursor: default;
+        }
+        .settings-select select {
+          width: auto;
+          padding: 8px 10px;
         }
         .settings-item-label {
           font-size: var(--text-base);

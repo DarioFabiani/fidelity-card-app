@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { VitePWA } from 'vite-plugin-pwa';
-import { copyFileSync, existsSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8'));
 
 /**
  * GitHub Pages has no SPA fallback: a deep link like /shared?data=... is
@@ -30,6 +31,14 @@ function spaFallback() {
 
 export default defineConfig({
   base: '/fidelity-card-app/',
+  define: {
+    // Shown in Settings, so it always matches the build actually running.
+    __APP_VERSION__: JSON.stringify(version)
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.js']
+  },
   build: {
     rollupOptions: {
       output: {
@@ -47,7 +56,9 @@ export default defineConfig({
     spaFallback(),
     preact(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // See src/index.jsx: a new build waits for the user instead of
+      // reloading the page under them.
+      registerType: 'prompt',
       includeAssets: ['favicon.ico', 'icons/*.png', 'icons/icon.svg'],
       manifest: {
         name: 'Le Mie Carte Fedeltà',
@@ -59,6 +70,16 @@ export default defineConfig({
         orientation: 'portrait',
         scope: '/fidelity-card-app/',
         start_url: '/fidelity-card-app/',
+        lang: 'it',
+        // Long-press on the home-screen icon: straight to adding a card.
+        shortcuts: [
+          {
+            name: 'Aggiungi carta',
+            short_name: 'Aggiungi',
+            url: '/fidelity-card-app/add',
+            icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }]
+          }
+        ],
         icons: [
           {
             src: 'icons/icon-192.png',

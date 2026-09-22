@@ -1,5 +1,6 @@
 import { exportCards, importCards, listCardIds } from '../db';
-import { DEFAULT_CARD_COLOR } from './color';
+import { normalizeColor } from './color';
+import { normalizeFormat } from '../constants/barcodeFormats';
 import { deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer } from './crypto';
 
 const EXPORT_FORMAT = 'fidelity-card-app';
@@ -13,7 +14,7 @@ const EXPORT_VERSION = 2;
  * the whole vault. Types are coerced too, so a missing createdAt can't turn
  * date ordering into NaN comparisons.
  */
-function validateCards(cards) {
+export function validateCards(cards) {
   if (!Array.isArray(cards)) throw new Error('Formato non valido');
   const now = Date.now();
   return cards.map(card => {
@@ -24,25 +25,38 @@ function validateCards(cards) {
       id: String(card.id),
       providerName: String(card.providerName),
       cardNumber: String(card.cardNumber),
-      barcodeFormat: card.barcodeFormat ? String(card.barcodeFormat) : 'CODE128',
+      barcodeFormat: normalizeFormat(card.barcodeFormat),
       notes: card.notes ? String(card.notes) : '',
-      color: card.color ? String(card.color) : DEFAULT_CARD_COLOR,
+      color: normalizeColor(card.color),
       logoUrl: card.logoUrl ? String(card.logoUrl) : '',
       favorite: card.favorite === true,
       createdAt: Number.isFinite(card.createdAt) ? card.createdAt : now,
-      updatedAt: Number.isFinite(card.updatedAt) ? card.updatedAt : now
+      updatedAt: Number.isFinite(card.updatedAt) ? card.updatedAt : now,
+      ...(Number.isFinite(card.lastUsedAt) ? { lastUsedAt: card.lastUsedAt } : {})
     };
   });
 }
 
-function saveFile(text) {
+/**
+ * Hands a JSON file to the browser. The object URL is revoked a moment later,
+ * not straight after click(): Safari and Firefox start the download
+ * asynchronously, and revoking synchronously could leave an empty or failed
+ * download behind.
+ */
+export function saveJsonFile(text, filename) {
   const blob = new Blob([text], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `carte-fedelta-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+function saveFile(text) {
+  saveJsonFile(text, `carte-fedelta-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 /**

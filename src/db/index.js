@@ -69,16 +69,37 @@ async function decryptCard(card) {
   return { ...rest, ...sensitive };
 }
 
+// One connection for the lifetime of the tab. Opening a fresh one on every
+// call left a trail of unclosed connections behind each read, and any of them
+// would block a future schema upgrade until the tab was closed.
+let dbPromise = null;
+
 function getDB() {
-  return openDB(DB_NAME, DB_VERSION, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        store.createIndex('providerName', 'providerName');
-        store.createIndex('createdAt', 'createdAt');
+  if (!dbPromise) {
+    dbPromise = openDB(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          store.createIndex('providerName', 'providerName');
+          store.createIndex('createdAt', 'createdAt');
+        }
+      },
+      // A newer build open in another tab wants to upgrade: step aside so it
+      // is not stuck, and reconnect on the next call.
+      blocking() {
+        dbPromise?.then(db => db.close());
+        dbPromise = null;
+      },
+      terminated() {
+        dbPromise = null;
       }
-    }
-  });
+    }).catch(err => {
+      // Don't cache a failure: the next call gets a fresh attempt.
+      dbPromise = null;
+      throw err;
+    });
+  }
+  return dbPromise;
 }
 
 /**
@@ -118,6 +139,7 @@ function unreadableCard(raw) {
     favorite: false,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
+    lastUsedAt: raw.lastUsedAt,
     _unreadable: true
   };
 }
@@ -170,7 +192,8 @@ export async function addCard(card) {
     // without decrypting every card first.
     favorite: card.favorite === true,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    lastUsedAt: now
   };
   const toStore = isEncryptionEnabled() ? await encryptCard(newCard) : newCard;
   await db.add(STORE_NAME, toStore);
@@ -204,6 +227,36 @@ export async function toggleFavorite(id) {
   // original ciphertext.
   if (card._unreadable) throw new Error('Carta non leggibile');
   return updateCard({ id, favorite: !card.favorite });
+}
+
+/**
+ * Records that the card was just shown, so "Recenti" can put the cards
+ * actually used at the till on top.
+ *
+ * lastUsedAt sits in the clear (like favourite and the dates), so this writes
+ * the raw record back untouched apart from that one field: no decryption, no
+ * key needed, and updatedAt stays put — it keys the share-link cache, and
+ * merely looking at a card must not retire a link already sent. Best effort:
+ * a failure only costs the ordering.
+ */
+export async function touchCard(id) {
+  try {
+    const db = await getDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const raw = await tx.store.get(id);
+    if (raw) await tx.store.put({ ...raw, lastUsedAt: Date.now() });
+    await tx.done;
+  } catch {
+    // Ordering only.
+  }
+}
+
+/**
+ * Drops the key from memory. The data stays sealed on disk; the next read
+ * needs the password again.
+ */
+export function lock() {
+  clearEncryptionKey();
 }
 
 /**
@@ -351,11 +404,6 @@ export async function disableEncryption() {
 }
 
 /**
- * Derives the key from `password` using the stored salt and verifies it against
- * the stored verifier. Returns true and keeps the key in memory on success,
- * false (key discarded) if the password is wrong.
- */
-/**
  * Seals any record still sitting in the clear while encryption is on — the
  * residue of an enableEncryption that was interrupted partway through, which
  * would otherwise stay unencrypted at rest forever while the vault claims to
@@ -389,6 +437,11 @@ async function sealPlaintextResidue() {
   }
 }
 
+/**
+ * Derives the key from `password` using the stored salt and verifies it against
+ * the stored verifier. Returns true and keeps the key in memory on success,
+ * false (key discarded) if the password is wrong.
+ */
 export async function unlock(password) {
   const salt = getStoredSalt();
   if (!salt) return false;

@@ -1,5 +1,6 @@
 import { deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer } from './crypto';
-import { DEFAULT_CARD_COLOR } from './color';
+import { normalizeColor } from './color';
+import { normalizeFormat } from '../constants/barcodeFormats';
 
 // Excludes characters that are easily confused when read aloud or copied by
 // hand: 0/O, 1/I/L, 5/S, 8/B. 28 symbols, 8 of them -> ~38 bits.
@@ -72,6 +73,11 @@ function normalizeShareCode(input) {
  */
 const shareLinks = new Map();
 
+/** Forgets every code handed out: called when the vault locks. */
+export function clearShareLinks() {
+  shareLinks.clear();
+}
+
 export async function getShareLink(card) {
   const key = `${card.id}:${card.updatedAt ?? ''}`;
   const cached = shareLinks.get(key);
@@ -132,12 +138,17 @@ export async function decodeSharedCard(dataParam, code) {
     const salt = base64ToBuffer(saltB64);
     const key = await deriveKey(secret, salt);
     const payload = await decryptJSON(sealed, key);
+    // Decrypting proves who made the link, not what they put in it: the
+    // fields are checked like any other outside input.
+    if (!payload || typeof payload.p !== 'string' || !payload.p || typeof payload.n !== 'string' || !payload.n) {
+      return null;
+    }
     return {
       providerName: payload.p,
       cardNumber: payload.n,
-      barcodeFormat: payload.f || 'CODE128',
-      color: payload.c || DEFAULT_CARD_COLOR,
-      notes: payload.t || ''
+      barcodeFormat: normalizeFormat(payload.f),
+      color: normalizeColor(payload.c),
+      notes: typeof payload.t === 'string' ? payload.t : ''
     };
   } catch {
     return null;

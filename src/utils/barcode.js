@@ -6,32 +6,31 @@ import QRCode from 'qrcode';
 // da JsBarcode così com'è (case-insensitive), non serve una mappa dedicata.
 // QR_CODE non è supportato da JsBarcode: va renderizzato a parte con la
 // libreria `qrcode`, vedi renderQrCode() più sotto.
+const BARCODE_OPTIONS = {
+  width: 2,
+  height: 100,
+  displayValue: true,
+  fontSize: 16,
+  margin: 10,
+  background: '#FFFFFF',
+  lineColor: '#000000'
+};
+
+/**
+ * Returns 'ok', 'fallback' when the value is not valid for `format` and was
+ * drawn as Code 128 instead (the caller says so: a till expecting an EAN may
+ * still read it, but the user should know it is not the original barcode),
+ * or false when nothing could be drawn.
+ */
 export function renderBarcode(svgElement, value, format = 'CODE128') {
   try {
-    JsBarcode(svgElement, value, {
-      format,
-      width: 2,
-      height: 100,
-      displayValue: true,
-      fontSize: 16,
-      margin: 10,
-      background: '#FFFFFF',
-      lineColor: '#000000'
-    });
-    return true;
+    JsBarcode(svgElement, value, { ...BARCODE_OPTIONS, format });
+    return 'ok';
   } catch {
+    if (format === 'CODE128') return false;
     try {
-      JsBarcode(svgElement, value, {
-        format: 'CODE128',
-        width: 2,
-        height: 100,
-        displayValue: true,
-        fontSize: 16,
-        margin: 10,
-        background: '#FFFFFF',
-        lineColor: '#000000'
-      });
-      return true;
+      JsBarcode(svgElement, value, { ...BARCODE_OPTIONS, format: 'CODE128' });
+      return 'fallback';
     } catch {
       return false;
     }
