@@ -26,7 +26,10 @@ export function validateCards(cards) {
   if (!Array.isArray(cards)) throw new Error('Formato non valido');
   const now = Date.now();
   return cards.map(card => {
-    if (!card || !card.id || !card.providerName || !card.cardNumber) {
+    const scalar = v => typeof v === 'string' || typeof v === 'number';
+    if (!card || !scalar(card.id) || !scalar(card.providerName) || !scalar(card.cardNumber) ||
+        card.id === '' || card.providerName === '' || card.cardNumber === '') {
+      // Also refuses objects, which would otherwise become "[object Object]".
       throw new Error('Dati carta incompleti');
     }
     return {

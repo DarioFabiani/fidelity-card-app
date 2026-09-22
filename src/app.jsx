@@ -5,7 +5,10 @@ import { Toast } from './components/Toast';
 import { UnlockScreen } from './components/UnlockScreen';
 import { VaultRecovery } from './components/VaultRecovery';
 import { UpdateBanner } from './components/UpdateBanner';
-import { isEncryptionEnabled, hasEncryptionKey, repairEncryptionState, lock, ENC_ENABLED_KEY, ENC_SALT_KEY } from './db';
+import {
+  isEncryptionEnabled, hasEncryptionKey, repairEncryptionState, lock,
+  ENC_ENABLED_KEY, ENC_SALT_KEY, ENC_PENDING_KEY
+} from './db';
 import { clearShareLinks } from './utils/share';
 import { shouldAutoLock } from './utils/autolock';
 import { onUpdateReady, applyUpdate } from './utils/pwa';
@@ -68,9 +71,13 @@ export function App() {
           clearShareLinks();
           setUnlocked(true);
         }
-      } else if (e.key === ENC_SALT_KEY && e.oldValue && e.newValue && hasEncryptionKey()) {
-        // Password changed in another tab: the key held here is the old one,
-        // and a card saved with it would be unreadable under the new one.
+      } else if (
+        hasEncryptionKey() &&
+        ((e.key === ENC_SALT_KEY && e.oldValue && e.newValue) || (e.key === ENC_PENDING_KEY && e.newValue))
+      ) {
+        // Password changed (or starting to change) in another tab: the key
+        // held here is the old one, and a card saved with it would be
+        // unreadable under the new one.
         lockVault();
       }
     };

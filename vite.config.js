@@ -101,6 +101,11 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Lets the worker take the page over on its very first install, so
+        // the lazily loaded barcode chunks are served from the precache even
+        // if the network drops during that first visit. Later builds still
+        // wait for "Aggiorna" (see src/index.jsx).
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Only the ZXing scanner (~415 kB) stays out of the precache: it is
         // optional (a number can always be typed in) and CardForm already
@@ -122,10 +127,9 @@ export default defineConfig({
             }
           },
           {
-            // Kept alongside the precache, not instead of it. The precache
-            // covers the current build; this keeps the PREVIOUS build's chunk
-            // reachable for a tab that was already open when a new version was
-            // deployed, whose hashed filename no longer exists on the server.
+            // Safety net only: these chunks are precached, and the precache
+            // route answers first. A tab on an older build keeps its chunks
+            // anyway, since a waiting worker no longer takes over by itself.
             urlPattern: /\/assets\/(barcode|qrcode)-.*\.js$/,
             handler: 'CacheFirst',
             options: {

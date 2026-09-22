@@ -56,3 +56,22 @@ describe('backup iterations', async () => {
     expect(() => backupIterations('600000')).toThrow();
   });
 });
+
+describe('legacy shared links', async () => {
+  const { decodeSharedCard, isValidShareData } = await import('../utils/share');
+  const c = await import('../utils/crypto');
+
+  it('still opens a link made before the iteration count was included', async () => {
+    const salt = c.generateSalt();
+    const key = await c.deriveKey('K7M2P9XR', salt, c.LEGACY_PBKDF2_ITERATIONS);
+    const sealed = await c.encryptJSON({ p: 'Conad', n: '123', f: 'CODE128', c: '#A34F47', t: '' }, key);
+    const data = `${c.bufferToBase64(salt)}.${sealed}`.replace(/\+/g, '-').replace(/\//g, '_');
+    expect(isValidShareData(data)).toBe(true);
+    expect((await decodeSharedCard(data, 'k7m2-p9xr')).providerName).toBe('Conad');
+  });
+
+  it('rejects an absurd or truncated iteration count', () => {
+    expect(isValidShareData('A'.repeat(24) + '.' + 'B'.repeat(60) + '.60')).toBe(false);
+    expect(isValidShareData('A'.repeat(24) + '.' + 'B'.repeat(60) + '.999999999')).toBe(false);
+  });
+});

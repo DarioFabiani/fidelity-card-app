@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'preact/hooks';
+import { useState, useMemo, useRef } from 'preact/hooks';
 import { PROVIDERS } from '../constants/providers';
 import { BARCODE_FORMATS, suggestFormat, isAlphanumericFormat } from '../constants/barcodeFormats';
 import { CARD_COLORS, DEFAULT_CARD_COLOR } from '../utils/color';
@@ -26,6 +26,24 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
   const [ScannerComponent, setScannerComponent] = useState(null);
   const [scannerError, setScannerError] = useState('');
   const [submitError, setSubmitError] = useState('');
+  // Which keyboard the number field asks for. Kept as explicit state rather
+  // than derived from the guessed format: deriving it flipped the keyboard
+  // mid-typing as soon as the digits happened to form a valid EAN.
+  const [lettersKeyboard, setLettersKeyboard] = useState(
+    () => /[^0-9\s]/.test(initial?.cardNumber || '') ||
+      ['CODE39', 'QR_CODE', 'CODABAR'].includes(initial?.barcodeFormat)
+  );
+  const numberRef = useRef(null);
+
+  const toggleKeyboard = () => {
+    setLettersKeyboard(v => !v);
+    // Mobile keyboards only pick up a new inputmode on the next focus.
+    const input = numberRef.current;
+    if (input && document.activeElement === input) {
+      input.blur();
+      setTimeout(() => input.focus(), 0);
+    }
+  };
 
   const duplicate = useMemo(
     () => existingCards.find(c => c.id !== initial?.id && !c._unreadable && sameCardNumber(c.cardNumber, cardNumber)),
@@ -83,6 +101,8 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
 
   const handleCardNumberInput = (value) => {
     setCardNumber(value);
+    // Letters pasted in: the digits-only keypad would not let them be edited.
+    if (/[^0-9\s]/.test(value)) setLettersKeyboard(true);
     if (!initial && !formatPickedByUser) {
       setBarcodeFormat(suggestFormat(value));
     }
@@ -142,19 +162,26 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
         <label class="label-caps form-label">Numero carta *</label>
         <div class="card-number-row">
           <input
+            ref={numberRef}
             type="text"
             value={cardNumber}
             onInput={e => handleCardNumberInput(e.target.value)}
             placeholder="Numero o codice a barre"
             required
-            // Digits-only keypad for EAN/UPC/ITF; the full keyboard where the
-            // format allows letters, or once the number already has some —
-            // the numeric keypad made codes like "IK-123" impossible to type.
-            inputMode={isAlphanumericFormat(barcodeFormat) || /[^0-9\s]/.test(cardNumber) ? 'text' : 'numeric'}
+            inputMode={lettersKeyboard ? 'text' : 'numeric'}
             autoCapitalize="characters"
             autoComplete="off"
             spellcheck={false}
           />
+          <button
+            type="button"
+            class="scan-btn keyboard-btn"
+            onClick={toggleKeyboard}
+            aria-label={lettersKeyboard ? 'Usa il tastierino numerico' : 'Usa la tastiera con lettere'}
+            title={lettersKeyboard ? 'Tastierino numerico' : 'Tastiera con lettere'}
+          >
+            {lettersKeyboard ? '123' : 'ABC'}
+          </button>
           <button
             type="button"
             class="scan-btn"
@@ -189,7 +216,12 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
         <label class="label-caps form-label">Formato codice a barre</label>
         <select
           value={barcodeFormat}
-          onChange={e => { setBarcodeFormat(e.target.value); setFormatPickedByUser(true); }}
+          onChange={e => {
+            setBarcodeFormat(e.target.value);
+            setFormatPickedByUser(true);
+            // Picked a format that carries letters: offer the letters.
+            if (isAlphanumericFormat(e.target.value) && e.target.value !== 'CODE128') setLettersKeyboard(true);
+          }}
         >
           {BARCODE_FORMATS.map(f => (
             <option key={f.value} value={f.value}>
@@ -279,6 +311,11 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCar
           border: 1px solid var(--color-border);
           border-radius: var(--radius-sm);
           color: var(--color-primary);
+        }
+        .keyboard-btn {
+          font-size: var(--text-xs);
+          font-weight: 700;
+          letter-spacing: 0.04em;
         }
         .scan-btn:active {
           background: var(--color-bg);

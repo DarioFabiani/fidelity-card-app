@@ -31,6 +31,14 @@ export function BarcodeScanner({ onDetected, onClose }) {
   // Only offered when the camera actually exposes a torch.
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  // The camera keeps decoding while a photo is read: report only the first.
+  const detectedRef = useRef(false);
+  const report = (text, format) => {
+    if (detectedRef.current) return;
+    detectedRef.current = true;
+    controlsRef.current?.stop();
+    onDetected(text, format);
+  };
 
   // Escape closes the scanner on desktop.
   useEffect(() => {
@@ -62,9 +70,7 @@ export function BarcodeScanner({ onDetected, onClose }) {
     const url = URL.createObjectURL(file);
     try {
       const result = await createReader().decodeFromImageUrl(url);
-      const format = ZXING_TO_APP_FORMAT[result.getBarcodeFormat()] || 'CODE128';
-      controlsRef.current?.stop();
-      onDetected(result.getText(), format);
+      report(result.getText(), ZXING_TO_APP_FORMAT[result.getBarcodeFormat()] || 'CODE128');
     } catch {
       setImageError('Nessun codice trovato nell\'immagine. Prova con una foto più nitida o ritagliata sul codice.');
     } finally {
@@ -83,9 +89,7 @@ export function BarcodeScanner({ onDetected, onClose }) {
         videoRef.current,
         (result) => {
           if (cancelled || !result) return;
-          const format = ZXING_TO_APP_FORMAT[result.getBarcodeFormat()] || 'CODE128';
-          controlsRef.current?.stop();
-          onDetected(result.getText(), format);
+          report(result.getText(), ZXING_TO_APP_FORMAT[result.getBarcodeFormat()] || 'CODE128');
         }
       )
       .then(controls => {

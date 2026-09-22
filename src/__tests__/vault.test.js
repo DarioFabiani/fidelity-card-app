@@ -136,3 +136,50 @@ describe('vault', () => {
     expect(after.lastUsedAt).toBeGreaterThan(card.lastUsedAt);
   });
 });
+
+describe('vault key changes under pressure', () => {
+  it('a lock during the password change aborts it and loses nothing', async () => {
+    await seed();
+    await db.enableEncryption('vecchia1');
+    const change = db.changePassword('vecchia1', 'nuova123');
+    db.lock(); // auto-lock / padlock while the change is running
+    await expect(change).rejects.toThrow();
+    expect(db.hasEncryptionKey()).toBe(false);
+    expect(await db.unlock('nuova123')).toBe(false);
+    expect(await db.unlock('vecchia1')).toBe(true);
+    expect(await names()).toEqual(['Conad', 'Coop']);
+  });
+
+  it('refuses to re-key when the held key opens none of the cards', async () => {
+    await seed();
+    await db.enableEncryption('vecchia1');
+    // Another tab re-sealed every card under a key this one does not hold.
+    const { openDB } = await import('idb');
+    const idb = await openDB('fidelity-cards-db', 1);
+    const foreign = await crypto.deriveKey('altra', crypto.generateSalt());
+    for (const r of await idb.getAll('cards')) {
+      await idb.put('cards', { ...r, _enc: await crypto.encryptJSON({ providerName: 'x', cardNumber: '1' }, foreign) });
+    }
+    idb.close();
+    const saltBefore = localStorage.getItem('fidelity-encryption-salt');
+    await expect(db.changePassword('vecchia1', 'nuova123')).rejects.toThrow();
+    expect(localStorage.getItem('fidelity-encryption-salt')).toBe(saltBefore);
+    expect(localStorage.getItem('fidelity-encryption-pending')).toBeNull();
+  });
+
+  it('leaves a single corrupted record alone and re-keys the rest', async () => {
+    await seed();
+    await db.enableEncryption('vecchia1');
+    const { openDB } = await import('idb');
+    const idb = await openDB('fidelity-cards-db', 1);
+    const [first] = await idb.getAll('cards');
+    await idb.put('cards', { ...first, _enc: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' });
+    idb.close();
+    expect(await db.changePassword('vecchia1', 'nuova123')).toBe(true);
+    db.lock();
+    expect(await db.unlock('nuova123')).toBe(true);
+    const cards = await db.getAllCards();
+    expect(cards.filter(c => c._unreadable)).toHaveLength(1);
+    expect(cards.filter(c => !c._unreadable)).toHaveLength(1);
+  });
+});

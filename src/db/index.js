@@ -18,7 +18,8 @@ export const ENC_SALT_KEY = 'fidelity-encryption-salt';
 const ENC_ITERATIONS_KEY = 'fidelity-encryption-iterations';
 // Parameters of a key change in progress (see rekeyVault). Present only
 // between writing the re-sealed cards and promoting the new parameters.
-const ENC_PENDING_KEY = 'fidelity-encryption-pending';
+// Exported: other tabs lock as soon as a key change starts.
+export const ENC_PENDING_KEY = 'fidelity-encryption-pending';
 // A known constant sealed with the master key at setup time. Decrypting it is
 // what proves a password is right, so verification no longer depends on there
 // being at least one card in the vault.
@@ -30,13 +31,31 @@ const VERIFIER_PLAINTEXT = { v: 1 };
 // localStorage, or anywhere else persistent. Losing it (reload, close app)
 // means the app must be unlocked again with the password.
 let encryptionKey = null;
+// Bumped whenever the in-memory key is set or dropped. A long operation
+// (rekeyVault) compares it before writing, to notice that the vault was
+// locked — or unlocked with another key — while it was working.
+let keyGeneration = 0;
 
 function setEncryptionKey(key) {
   encryptionKey = key;
+  keyGeneration++;
 }
 
 function clearEncryptionKey() {
   encryptionKey = null;
+  keyGeneration++;
+}
+
+/**
+ * Runs `fn` holding a lock shared by every tab of the app. Unlocking and
+ * re-keying read the key parameters, rewrite every record and then the
+ * parameters: two tabs doing that at once (both upgrading a legacy vault on
+ * unlock, say) could each promote their own salt over cards sealed by the
+ * other. Where the Web Locks API is missing, runs unguarded.
+ */
+function withVaultLock(fn) {
+  const locks = globalThis.navigator?.locks;
+  return locks ? locks.request('fidelity-vault', fn) : fn();
 }
 
 export function hasEncryptionKey() {
@@ -383,7 +402,11 @@ export async function exportCards() {
  * localStorage (the salt is not secret), keeps the key only in memory, and
  * re-saves every existing card encrypted.
  */
-export async function enableEncryption(password) {
+export function enableEncryption(password) {
+  return withVaultLock(() => enableEncryptionHoldingLock(password));
+}
+
+async function enableEncryptionHoldingLock(password) {
   const db = await getDB();
   const salt = generateSalt();
   const iterations = PBKDF2_ITERATIONS;
@@ -434,7 +457,11 @@ export async function enableEncryption(password) {
  * and re-saves them in the clear, then removes the salt/flag and drops the
  * key from memory.
  */
-export async function disableEncryption() {
+export function disableEncryption() {
+  return withVaultLock(() => disableEncryptionHoldingLock());
+}
+
+async function disableEncryptionHoldingLock() {
   const db = await getDB();
   const raw = await db.getAll(STORE_NAME);
   const decrypted = await Promise.all(raw.map(decryptCard));
@@ -473,8 +500,13 @@ export async function disableEncryption() {
  * Records that cannot be decrypted now are left exactly as they are: they are
  * already unreadable, and re-sealing a placeholder would destroy the original.
  */
-async function rekeyVault(newPassword) {
-  if (!encryptionKey) throw new Error('Sblocca prima il vault');
+async function rekeyVault(oldKey, newPassword, generation) {
+  // The key is passed in once, not read from the global on every record: a
+  // lock (auto-lock, the padlock, another tab) partway through used to make
+  // every record fail to decrypt, get skipped, and the new parameters were
+  // promoted anyway — leaving every card under a key nobody could derive.
+  // `generation` is the caller's snapshot of keyGeneration, taken before its
+  // own first await, so a lock at any point of the operation is noticed.
 
   const salt = generateSalt();
   const iterations = PBKDF2_ITERATIONS;
@@ -488,14 +520,28 @@ async function rekeyVault(newPassword) {
   const db = await getDB();
   const raw = await db.getAll(STORE_NAME);
   const resealed = [];
+  let sealedCount = 0;
+  let unreadable = 0;
   for (const record of raw) {
+    if (record._enc) sealedCount++;
     let plain;
     try {
-      plain = await decryptCard(record);
+      plain = await decryptCardWith(record, oldKey);
     } catch {
+      unreadable++;
       continue;
     }
     resealed.push(await encryptCardWith(plain, newKey));
+  }
+
+  // Not one sealed record opens with the key we hold: it is not the key the
+  // cards are under (another tab re-keyed them). Writing now would promote
+  // parameters that open nothing.
+  if (sealedCount > 0 && unreadable === sealedCount) {
+    throw new Error('Le carte non si aprono con la chiave attuale: sblocca di nuovo e riprova');
+  }
+  if (keyGeneration !== generation) {
+    throw new Error('Il vault è stato bloccato durante l\'operazione: nessuna modifica fatta');
   }
 
   localStorage.setItem(ENC_PENDING_KEY, JSON.stringify(params));
@@ -512,7 +558,10 @@ async function rekeyVault(newPassword) {
     throw err;
   }
 
-  setEncryptionKey(newKey);
+  // From here the cards are under the new key: its parameters must be
+  // promoted whatever happened meanwhile. The key goes back in memory only if
+  // nobody locked the vault while we worked.
+  if (keyGeneration === generation) setEncryptionKey(newKey);
   try {
     writeKeyParams(params);
     localStorage.removeItem(ENC_PENDING_KEY);
@@ -541,19 +590,33 @@ async function keyForParams(password, { salt, verifier, iterations }) {
  * the vault is open: an unlocked phone left on a table must not be enough to
  * take the vault over. Resolves to false when `currentPassword` is wrong.
  */
-export async function changePassword(currentPassword, newPassword) {
-  if (!hasEncryptionKey()) throw new Error('Sblocca prima il vault');
-  const verifier = localStorage.getItem(ENC_VERIFIER_KEY);
-  const saltB64 = localStorage.getItem(ENC_SALT_KEY);
-  if (!verifier || !saltB64) throw new Error('Parametri di cifratura mancanti');
-  const current = await keyForParams(currentPassword, {
-    salt: saltB64,
-    verifier,
-    iterations: getStoredIterations()
+export function changePassword(currentPassword, newPassword) {
+  return withVaultLock(async () => {
+    if (!hasEncryptionKey()) throw new Error('Sblocca prima il vault');
+    const generation = keyGeneration;
+    const saltB64 = localStorage.getItem(ENC_SALT_KEY);
+    if (!saltB64) throw new Error('Parametri di cifratura mancanti');
+    const verifier = localStorage.getItem(ENC_VERIFIER_KEY);
+    const iterations = getStoredIterations();
+
+    let current;
+    if (verifier) {
+      current = await keyForParams(currentPassword, { salt: saltB64, verifier, iterations });
+    } else {
+      // Vault from before verifiers existed: check against the cards instead.
+      const db = await getDB();
+      if (!(await db.getAll(STORE_NAME)).some(c => c._enc)) {
+        throw new Error('Impossibile verificare la password attuale: aggiungi una carta e riprova');
+      }
+      const key = await deriveKey(currentPassword, base64ToBuffer(saltB64), iterations);
+      current = (await keyOpensRecords(key)) ? key : null;
+    }
+    if (!current) return false;
+
+    // Re-seal with the key just verified, not whatever sits in memory.
+    await rekeyVault(current, newPassword, generation);
+    return true;
   });
-  if (!current) return false;
-  await rekeyVault(newPassword);
-  return true;
 }
 
 /** Whether any sealed record opens with `key` (true when there are none). */
@@ -615,10 +678,10 @@ async function unlockAfterInterruptedRekey(password, pending) {
  * the password just verified. Silent and non-fatal: on failure the vault
  * simply stays on the old count and the next unlock tries again.
  */
-async function upgradeKeyIfNeeded(password) {
+async function upgradeKeyIfNeeded(password, key) {
   if (getStoredIterations() >= PBKDF2_ITERATIONS) return;
   try {
-    await rekeyVault(password);
+    await rekeyVault(key, password, keyGeneration);
   } catch {
     // Next unlock.
   }
@@ -663,7 +726,11 @@ async function sealPlaintextResidue() {
  * the stored verifier. Returns true and keeps the key in memory on success,
  * false (key discarded) if the password is wrong.
  */
-export async function unlock(password) {
+export function unlock(password) {
+  return withVaultLock(() => unlockHoldingLock(password));
+}
+
+async function unlockHoldingLock(password) {
   const pending = readPendingParams();
   if (pending) return unlockAfterInterruptedRekey(password, pending);
 
@@ -681,7 +748,7 @@ export async function unlock(password) {
     }
     setEncryptionKey(key);
     await sealPlaintextResidue();
-    await upgradeKeyIfNeeded(password);
+    await upgradeKeyIfNeeded(password, key);
     return true;
   }
 
@@ -710,6 +777,6 @@ export async function unlock(password) {
   setEncryptionKey(key);
   localStorage.setItem(ENC_VERIFIER_KEY, await encryptJSON(VERIFIER_PLAINTEXT, key));
   await sealPlaintextResidue();
-  await upgradeKeyIfNeeded(password);
+  await upgradeKeyIfNeeded(password, key);
   return true;
 }

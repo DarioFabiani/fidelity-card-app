@@ -1,4 +1,7 @@
-import { deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer } from './crypto';
+import {
+  deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer,
+  PBKDF2_ITERATIONS, LEGACY_PBKDF2_ITERATIONS
+} from './crypto';
 import { normalizeColor } from './color';
 import { normalizeFormat } from '../constants/barcodeFormats';
 
@@ -44,6 +47,28 @@ function toBase64Url(value) {
  */
 function fromBase64Url(value) {
   return value.replace(/-/g, '+').replace(/_/g, '/');
+}
+
+// A link is `salt.sealed.iterations`. Links made before the count was part
+// of it are `salt.sealed` and used the legacy count. The bounds keep a
+// hand-crafted link from freezing the page on key derivation.
+const MIN_LINK_ITERATIONS = 10000;
+const MAX_LINK_ITERATIONS = 5000000;
+
+/** Splits a data param into its parts, or null if it has no valid shape. */
+function parseShareData(dataParam) {
+  if (typeof dataParam !== 'string' || !dataParam) return null;
+  const parts = dataParam.split('.');
+  if (parts.length !== 2 && parts.length !== 3) return null;
+  const [salt, sealed, count] = parts;
+  if (!salt || !sealed) return null;
+  let iterations = LEGACY_PBKDF2_ITERATIONS;
+  if (parts.length === 3) {
+    if (!/^[0-9]+$/.test(count)) return null;
+    iterations = Number(count);
+    if (iterations < MIN_LINK_ITERATIONS || iterations > MAX_LINK_ITERATIONS) return null;
+  }
+  return { salt, sealed, iterations };
 }
 
 /** Groups the code in two blocks so it is easier to read out: ABCD-EFGH. */
@@ -107,14 +132,14 @@ export async function encodeCardForShare(card) {
 
   const code = generateShareCode();
   const salt = generateSalt();
-  const key = await deriveKey(code, salt);
+  const key = await deriveKey(code, salt, PBKDF2_ITERATIONS);
   const sealed = await encryptJSON(payload, key);
 
   // base64url: standard base64 puts '+' and '/' in the string, which any
   // URLSearchParams-based reader would mangle ('+' becomes a space) and mail
   // clients like to re-encode. Swapping them keeps the link intact through
   // naive parsers, and costs nothing to reverse on the way in.
-  const combined = toBase64Url(`${bufferToBase64(salt)}.${sealed}`);
+  const combined = `${toBase64Url(`${bufferToBase64(salt)}.${sealed}`)}.${PBKDF2_ITERATIONS}`;
   const base = window.location.origin + '/fidelity-card-app/';
   return { url: `${base}shared?data=${combined}`, code };
 }
@@ -127,16 +152,15 @@ export async function encodeCardForShare(card) {
  */
 export async function decodeSharedCard(dataParam, code) {
   const secret = normalizeShareCode(code);
-  if (!dataParam || !secret) return null;
-  const separatorIndex = dataParam.indexOf('.');
-  if (separatorIndex <= 0 || separatorIndex === dataParam.length - 1) return null;
+  const parsed = parseShareData(dataParam);
+  if (!parsed || !secret) return null;
 
-  const saltB64 = fromBase64Url(dataParam.slice(0, separatorIndex));
-  const sealed = fromBase64Url(dataParam.slice(separatorIndex + 1));
+  const saltB64 = fromBase64Url(parsed.salt);
+  const sealed = fromBase64Url(parsed.sealed);
 
   try {
     const salt = base64ToBuffer(saltB64);
-    const key = await deriveKey(secret, salt);
+    const key = await deriveKey(secret, salt, parsed.iterations);
     const payload = await decryptJSON(sealed, key);
     // Decrypting proves who made the link, not what they put in it: the
     // fields are checked like any other outside input.
@@ -163,19 +187,18 @@ const MIN_SEALED_BYTES = 12 + 16;
 
 /**
  * Checks whether a data param has the shape produced by encodeCardForShare
- * (salt + '.' + ciphertext), without needing the code.
+ * (salt + '.' + ciphertext, plus '.' + iterations on current links),
+ * without needing the code.
  *
  * Deliberately stricter than "there is a dot in it": a link cut short by a
  * chat client still contains the separator, and reporting that as a wrong
  * code sends the recipient off re-typing a code that was right all along.
  */
 export function isValidShareData(dataParam) {
-  if (typeof dataParam !== 'string' || !dataParam) return false;
-  const separatorIndex = dataParam.indexOf('.');
-  if (separatorIndex <= 0 || separatorIndex === dataParam.length - 1) return false;
+  const parsed = parseShareData(dataParam);
+  if (!parsed) return false;
 
-  const salt = dataParam.slice(0, separatorIndex);
-  const sealed = dataParam.slice(separatorIndex + 1);
+  const { salt, sealed } = parsed;
   if (salt.length !== SALT_B64_LENGTH) return false;
 
   // base64 carries 3 bytes per 4 characters; anything shorter than IV+tag
