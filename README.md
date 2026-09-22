@@ -10,8 +10,11 @@ Tutti i dati restano sul dispositivo (IndexedDB); non c'è alcun server.
 - **Alla cassa**: codice a schermo intero, schermo che resta acceso, numero copiabile.
 - **Lista**: preferiti in cima, ordine per uso recente o alfabetico, ricerca che ignora
   accenti e spazi nel numero.
-- **Cifratura opzionale** (AES-256-GCM, chiave derivata dalla password con PBKDF2):
-  blocco manuale dal lucchetto in alto e blocco automatico dopo un periodo in background.
+- **Cifratura opzionale** (AES-256-GCM, chiave derivata dalla password con
+  PBKDF2-SHA256 a 600.000 iterazioni): blocco manuale dal lucchetto in alto, blocco
+  automatico dopo un periodo in background, cambio della master password. Il cambio
+  password è resistente alle interruzioni: se l'app si chiude a metà, al successivo
+  sblocco resta valida la password che apre davvero le carte.
 - **Condivisione protetta**: link cifrato + codice di 8 caratteri da comunicare a parte.
 - **Backup** in JSON, protetto da password quando la cifratura è attiva.
 

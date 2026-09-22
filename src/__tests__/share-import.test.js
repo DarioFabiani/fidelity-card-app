@@ -44,3 +44,15 @@ describe('backup validation', async () => {
     expect(() => validateCards({})).toThrow();
   });
 });
+
+describe('backup iterations', async () => {
+  const { backupIterations } = await import('../utils/export-import');
+  const { LEGACY_PBKDF2_ITERATIONS } = await import('../utils/crypto');
+
+  it('reads old files as legacy and rejects absurd counts', () => {
+    expect(backupIterations(undefined)).toBe(LEGACY_PBKDF2_ITERATIONS);
+    expect(backupIterations(600000)).toBe(600000);
+    expect(() => backupIterations(1e12)).toThrow();
+    expect(() => backupIterations('600000')).toThrow();
+  });
+});

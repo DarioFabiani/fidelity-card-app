@@ -1,5 +1,8 @@
 import { openDB } from 'idb';
-import { deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer } from '../utils/crypto';
+import {
+  deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer,
+  PBKDF2_ITERATIONS, LEGACY_PBKDF2_ITERATIONS
+} from '../utils/crypto';
 import { DEFAULT_CARD_COLOR } from '../utils/color';
 
 const DB_NAME = 'fidelity-cards-db';
@@ -8,7 +11,14 @@ const STORE_NAME = 'cards';
 
 // Exported so other tabs can watch it via the `storage` event.
 export const ENC_ENABLED_KEY = 'fidelity-encryption-enabled';
-const ENC_SALT_KEY = 'fidelity-encryption-salt';
+// Exported so other tabs can tell when the key has been replaced.
+export const ENC_SALT_KEY = 'fidelity-encryption-salt';
+// PBKDF2 iteration count the current salt is used with. Absent on vaults set
+// up before it was stored, which used LEGACY_PBKDF2_ITERATIONS.
+const ENC_ITERATIONS_KEY = 'fidelity-encryption-iterations';
+// Parameters of a key change in progress (see rekeyVault). Present only
+// between writing the re-sealed cards and promoting the new parameters.
+const ENC_PENDING_KEY = 'fidelity-encryption-pending';
 // A known constant sealed with the master key at setup time. Decrypting it is
 // what proves a password is right, so verification no longer depends on there
 // being at least one card in the vault.
@@ -43,12 +53,46 @@ function getStoredSalt() {
   return saltB64 ? base64ToBuffer(saltB64) : null;
 }
 
+function getStoredIterations() {
+  const stored = Number(localStorage.getItem(ENC_ITERATIONS_KEY));
+  return Number.isInteger(stored) && stored > 0 ? stored : LEGACY_PBKDF2_ITERATIONS;
+}
+
+function clearKeyParams() {
+  localStorage.removeItem(ENC_ENABLED_KEY);
+  localStorage.removeItem(ENC_SALT_KEY);
+  localStorage.removeItem(ENC_VERIFIER_KEY);
+  localStorage.removeItem(ENC_ITERATIONS_KEY);
+  localStorage.removeItem(ENC_PENDING_KEY);
+}
+
+function readPendingParams() {
+  try {
+    const pending = JSON.parse(localStorage.getItem(ENC_PENDING_KEY) || 'null');
+    return pending && pending.salt && pending.verifier && Number.isInteger(pending.iterations)
+      ? pending
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Makes `params` ({salt, verifier, iterations}) the vault's current key. */
+function writeKeyParams({ salt, verifier, iterations }) {
+  localStorage.setItem(ENC_SALT_KEY, salt);
+  localStorage.setItem(ENC_VERIFIER_KEY, verifier);
+  localStorage.setItem(ENC_ITERATIONS_KEY, String(iterations));
+}
+
 // Fields that contain sensitive card data and get sealed into a single `_enc`
 // blob when encryption is active. Everything else (id, barcodeFormat, color,
 // logoUrl, createdAt, updatedAt) stays in the clear so lists can be rendered
 // and sorted without decrypting every card.
-async function encryptCard(card) {
-  if (!encryptionKey) throw new Error('Chiave di cifratura non impostata');
+// Takes the key explicitly for rekeyVault. Kept apart from encryptCard,
+// rather than an optional second parameter, because encryptCard is handed to
+// Array#map — which would pass the index as the key.
+async function encryptCardWith(card, key) {
+  if (!key) throw new Error('Chiave di cifratura non impostata');
   // Guard against sealing an already-sealed record: its plaintext fields are
   // gone, so re-encrypting would overwrite `_enc` with a blob of undefineds
   // and destroy the only copy of the data.
@@ -56,17 +100,25 @@ async function encryptCard(card) {
   const { providerName, cardNumber, notes, ...rest } = card;
   const sealed = await encryptJSON(
     { providerName, cardNumber, notes: notes || '' },
-    encryptionKey
+    key
   );
   return { ...rest, _enc: sealed };
 }
 
-async function decryptCard(card) {
+async function decryptCardWith(card, key) {
   if (!card || !card._enc) return card;
-  if (!encryptionKey) throw new Error('Carta cifrata ma chiave non disponibile');
+  if (!key) throw new Error('Carta cifrata ma chiave non disponibile');
   const { _enc, ...rest } = card;
-  const sensitive = await decryptJSON(_enc, encryptionKey);
+  const sensitive = await decryptJSON(_enc, key);
   return { ...rest, ...sensitive };
+}
+
+function encryptCard(card) {
+  return encryptCardWith(card, encryptionKey);
+}
+
+function decryptCard(card) {
+  return decryptCardWith(card, encryptionKey);
 }
 
 // One connection for the lifetime of the tab. Opening a fresh one on every
@@ -278,9 +330,7 @@ export async function resetEverything() {
   const tx = db.transaction(STORE_NAME, 'readwrite');
   await tx.store.clear();
   await tx.done;
-  localStorage.removeItem(ENC_ENABLED_KEY);
-  localStorage.removeItem(ENC_SALT_KEY);
-  localStorage.removeItem(ENC_VERIFIER_KEY);
+  clearKeyParams();
   clearEncryptionKey();
 }
 
@@ -329,14 +379,15 @@ export async function exportCards() {
 
 /**
  * Turns on encryption-at-rest: derives a new key from `password` (random
- * salt, PBKDF2-SHA256, 100000 iterations), stores the salt + enabled flag in
+ * salt, PBKDF2-SHA256, PBKDF2_ITERATIONS), stores the salt + enabled flag in
  * localStorage (the salt is not secret), keeps the key only in memory, and
  * re-saves every existing card encrypted.
  */
 export async function enableEncryption(password) {
   const db = await getDB();
   const salt = generateSalt();
-  const key = await deriveKey(password, salt);
+  const iterations = PBKDF2_ITERATIONS;
+  const key = await deriveKey(password, salt, iterations);
   const verifier = await encryptJSON(VERIFIER_PLAINTEXT, key);
 
   try {
@@ -353,8 +404,7 @@ export async function enableEncryption(password) {
     // (quota, disabled storage), and if the third one failed from outside it
     // the rollback below would never run — leaving a stale salt and verifier
     // for a password nobody holds, plus the key still in memory.
-    localStorage.setItem(ENC_SALT_KEY, bufferToBase64(salt));
-    localStorage.setItem(ENC_VERIFIER_KEY, verifier);
+    writeKeyParams({ salt: bufferToBase64(salt), verifier, iterations });
     localStorage.setItem(ENC_ENABLED_KEY, 'true');
 
     // Read the raw rows here rather than taking them from the caller: what the
@@ -373,9 +423,7 @@ export async function enableEncryption(password) {
   } catch (err) {
     // Nothing was sealed under a key we are about to forget: roll the flags
     // back so the vault stays plainly readable rather than half-locked.
-    localStorage.removeItem(ENC_ENABLED_KEY);
-    localStorage.removeItem(ENC_SALT_KEY);
-    localStorage.removeItem(ENC_VERIFIER_KEY);
+    clearKeyParams();
     clearEncryptionKey();
     throw err;
   }
@@ -397,10 +445,183 @@ export async function disableEncryption() {
   }
   await tx.done;
 
-  localStorage.removeItem(ENC_ENABLED_KEY);
-  localStorage.removeItem(ENC_SALT_KEY);
-  localStorage.removeItem(ENC_VERIFIER_KEY);
+  clearKeyParams();
   clearEncryptionKey();
+}
+
+/**
+ * Re-seals every card under a key derived from `newPassword` with a fresh salt
+ * and the current iteration count. Used to change the password and to move a
+ * vault off an older, weaker iteration count.
+ *
+ * This is the one operation that rewrites every sealed record, so it is built
+ * to survive being cut off at any point (app killed, battery, crash):
+ *
+ *   1. everything is decrypted and re-encrypted in memory — nothing written;
+ *   2. the NEW parameters are parked under ENC_PENDING_KEY, next to the
+ *      current ones, which stay untouched;
+ *   3. all re-sealed cards are written in ONE IndexedDB transaction, so the
+ *      store holds either every old record or every new one, never a mix;
+ *   4. the pending parameters are promoted to current.
+ *
+ * Cut off before 3 commits: the old key still opens everything, and unlock
+ * throws the parked parameters away. Cut off between 3 and 4: the cards are
+ * under the new key, whose parameters are still parked — unlock tries both
+ * and keeps whichever actually opens the cards. At no point are the cards
+ * sealed under a key whose salt has been lost.
+ *
+ * Records that cannot be decrypted now are left exactly as they are: they are
+ * already unreadable, and re-sealing a placeholder would destroy the original.
+ */
+async function rekeyVault(newPassword) {
+  if (!encryptionKey) throw new Error('Sblocca prima il vault');
+
+  const salt = generateSalt();
+  const iterations = PBKDF2_ITERATIONS;
+  const newKey = await deriveKey(newPassword, salt, iterations);
+  const params = {
+    salt: bufferToBase64(salt),
+    verifier: await encryptJSON(VERIFIER_PLAINTEXT, newKey),
+    iterations
+  };
+
+  const db = await getDB();
+  const raw = await db.getAll(STORE_NAME);
+  const resealed = [];
+  for (const record of raw) {
+    let plain;
+    try {
+      plain = await decryptCard(record);
+    } catch {
+      continue;
+    }
+    resealed.push(await encryptCardWith(plain, newKey));
+  }
+
+  localStorage.setItem(ENC_PENDING_KEY, JSON.stringify(params));
+
+  try {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    for (const card of resealed) {
+      await tx.store.put(card);
+    }
+    await tx.done;
+  } catch (err) {
+    // Nothing committed: the old key still opens everything.
+    localStorage.removeItem(ENC_PENDING_KEY);
+    throw err;
+  }
+
+  setEncryptionKey(newKey);
+  try {
+    writeKeyParams(params);
+    localStorage.removeItem(ENC_PENDING_KEY);
+  } catch {
+    // The cards are already under the new key and its parameters are still
+    // parked: the next unlock finishes the promotion.
+  }
+}
+
+/**
+ * Checks `password` against a set of key parameters. Resolves to the derived
+ * key when it matches, null otherwise.
+ */
+async function keyForParams(password, { salt, verifier, iterations }) {
+  const key = await deriveKey(password, base64ToBuffer(salt), iterations);
+  try {
+    await decryptJSON(verifier, key);
+    return key;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Changes the master password. The current one is asked again even though
+ * the vault is open: an unlocked phone left on a table must not be enough to
+ * take the vault over. Resolves to false when `currentPassword` is wrong.
+ */
+export async function changePassword(currentPassword, newPassword) {
+  if (!hasEncryptionKey()) throw new Error('Sblocca prima il vault');
+  const verifier = localStorage.getItem(ENC_VERIFIER_KEY);
+  const saltB64 = localStorage.getItem(ENC_SALT_KEY);
+  if (!verifier || !saltB64) throw new Error('Parametri di cifratura mancanti');
+  const current = await keyForParams(currentPassword, {
+    salt: saltB64,
+    verifier,
+    iterations: getStoredIterations()
+  });
+  if (!current) return false;
+  await rekeyVault(newPassword);
+  return true;
+}
+
+/** Whether any sealed record opens with `key` (true when there are none). */
+async function keyOpensRecords(key) {
+  const db = await getDB();
+  const sealed = (await db.getAll(STORE_NAME)).filter(c => c._enc);
+  if (!sealed.length) return true;
+  for (const record of sealed) {
+    try {
+      await decryptCardWith(record, key);
+      return true;
+    } catch {
+      // Could be a single corrupted record; keep looking.
+    }
+  }
+  return false;
+}
+
+/**
+ * Unlock while a key change was interrupted (see rekeyVault): the cards are
+ * under either the old or the new key, and the password typed may be either.
+ * Keeps the parameters that both match the password and open the cards.
+ */
+async function unlockAfterInterruptedRekey(password, pending) {
+  const current = {
+    salt: localStorage.getItem(ENC_SALT_KEY),
+    verifier: localStorage.getItem(ENC_VERIFIER_KEY),
+    iterations: getStoredIterations()
+  };
+  const candidates = [
+    { params: pending, isPending: true },
+    ...(current.salt && current.verifier ? [{ params: current, isPending: false }] : [])
+  ];
+
+  // Matching a verifier is not enough: the old password still matches the
+  // old verifier after the cards have moved to the new key. Only a key that
+  // actually opens the cards is kept — adopting the other one would throw
+  // away the only parameters that can read them. (A vault whose records are
+  // all corrupted stays locked here; the recovery screen covers that.)
+  let matched = null;
+  for (const candidate of candidates) {
+    const key = await keyForParams(password, candidate.params);
+    if (key && await keyOpensRecords(key)) {
+      matched = { ...candidate, key };
+      break;
+    }
+  }
+  if (!matched) return false;
+
+  if (matched.isPending) writeKeyParams(pending);
+  localStorage.removeItem(ENC_PENDING_KEY);
+  setEncryptionKey(matched.key);
+  await sealPlaintextResidue();
+  return true;
+}
+
+/**
+ * Moves a vault still on an older iteration count to the current one, with
+ * the password just verified. Silent and non-fatal: on failure the vault
+ * simply stays on the old count and the next unlock tries again.
+ */
+async function upgradeKeyIfNeeded(password) {
+  if (getStoredIterations() >= PBKDF2_ITERATIONS) return;
+  try {
+    await rekeyVault(password);
+  } catch {
+    // Next unlock.
+  }
 }
 
 /**
@@ -443,10 +664,13 @@ async function sealPlaintextResidue() {
  * false (key discarded) if the password is wrong.
  */
 export async function unlock(password) {
+  const pending = readPendingParams();
+  if (pending) return unlockAfterInterruptedRekey(password, pending);
+
   const salt = getStoredSalt();
   if (!salt) return false;
 
-  const key = await deriveKey(password, salt);
+  const key = await deriveKey(password, salt, getStoredIterations());
   const verifier = localStorage.getItem(ENC_VERIFIER_KEY);
 
   if (verifier) {
@@ -457,6 +681,7 @@ export async function unlock(password) {
     }
     setEncryptionKey(key);
     await sealPlaintextResidue();
+    await upgradeKeyIfNeeded(password);
     return true;
   }
 
@@ -485,5 +710,6 @@ export async function unlock(password) {
   setEncryptionKey(key);
   localStorage.setItem(ENC_VERIFIER_KEY, await encryptJSON(VERIFIER_PLAINTEXT, key));
   await sealPlaintextResidue();
+  await upgradeKeyIfNeeded(password);
   return true;
 }

@@ -37,7 +37,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.js']
+    include: ['src/**/*.test.js'],
+    testTimeout: 30000
   },
   build: {
     rollupOptions: {

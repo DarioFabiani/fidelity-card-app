@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { route } from 'preact-router';
 import { downloadExport, pickImportFile, decryptImport, commitImport } from '../utils/export-import';
-import { isEncryptionEnabled, enableEncryption, disableEncryption } from '../db';
+import { isEncryptionEnabled, enableEncryption, disableEncryption, changePassword } from '../db';
 import { PageHeader } from '../components/PageHeader';
 import { PasswordPrompt } from '../components/PasswordPrompt';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -24,6 +24,7 @@ export function Settings({ showToast }) {
   const [askExportPassword, setAskExportPassword] = useState(false);
   const [pendingImport, setPendingImport] = useState(null);
   const [autoLock, setAutoLock] = useState(getAutoLockMinutes);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   const runExport = async (password) => {
     setExporting(true);
@@ -136,6 +137,18 @@ export function Settings({ showToast }) {
         )}
 
         {encryptionEnabled && (
+          <button class="settings-item" onClick={() => setShowChangePassword(true)}>
+            <div class="settings-item-content">
+              <span class="settings-item-label">Cambia password</span>
+              <span class="settings-item-desc">Ricifra le carte con una nuova master password</span>
+            </div>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.7 12.3 21 2" /><path d="m16 7 3 3" /><path d="m19 4 2 2" />
+            </svg>
+          </button>
+        )}
+
+        {encryptionEnabled && (
           <label class="settings-item settings-select">
             <div class="settings-item-content">
               <span class="settings-item-label">Blocco automatico</span>
@@ -189,6 +202,30 @@ export function Settings({ showToast }) {
             setEncryptionEnabled(true);
             setShowSetup(false);
             showToast('Cifratura attivata');
+          }}
+        />
+      )}
+
+      {showChangePassword && (
+        <PasswordPrompt
+          title="Cambia password"
+          description="Le carte vengono ricifrate con la nuova password. Anche i backup protetti già esportati restano apribili solo con la password usata per crearli."
+          submitLabel="Cambia password"
+          withCurrent
+          withConfirm
+          newPasswordLabel="Nuova password"
+          minLength={6}
+          onClose={() => setShowChangePassword(false)}
+          onSubmit={async (password, current) => {
+            if (password === current) return 'La nuova password è uguale a quella attuale';
+            try {
+              const ok = await changePassword(current, password);
+              if (!ok) return 'Password attuale errata';
+            } catch (err) {
+              return err?.message || 'Errore nel cambio password';
+            }
+            setShowChangePassword(false);
+            showToast('Password cambiata');
           }}
         />
       )}

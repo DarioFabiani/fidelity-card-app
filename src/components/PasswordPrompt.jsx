@@ -10,10 +10,14 @@ export function PasswordPrompt({
   description,
   submitLabel = 'Conferma',
   withConfirm = false,
+  // Also asks for the password in use now; passed to onSubmit as 2nd arg.
+  withCurrent = false,
+  newPasswordLabel = 'Password',
   minLength = 0,
   onSubmit,
   onClose
 }) {
+  const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,6 +28,10 @@ export function PasswordPrompt({
     if (busy) return;
     setError('');
 
+    if (withCurrent && !currentPassword) {
+      setError('Inserisci la password attuale');
+      return;
+    }
     if (minLength && password.length < minLength) {
       setError(`La password deve avere almeno ${minLength} caratteri`);
       return;
@@ -35,7 +43,7 @@ export function PasswordPrompt({
 
     setBusy(true);
     try {
-      const failure = await onSubmit(password);
+      const failure = await onSubmit(password, currentPassword);
       if (failure) setError(failure);
     } finally {
       setBusy(false);
@@ -49,17 +57,29 @@ export function PasswordPrompt({
         {description && <p class="pw-desc">{description}</p>}
 
         <form onSubmit={handleSubmit} class="pw-form">
+          {withCurrent && (
+            <input
+              type="password"
+              placeholder="Password attuale"
+              autoComplete="current-password"
+              value={currentPassword}
+              onInput={e => setCurrentPassword(e.target.value)}
+              autoFocus
+            />
+          )}
           <input
             type="password"
-            placeholder="Password"
+            placeholder={newPasswordLabel}
+            autoComplete={withConfirm ? 'new-password' : 'current-password'}
             value={password}
             onInput={e => setPassword(e.target.value)}
-            autoFocus
+            autoFocus={!withCurrent}
           />
           {withConfirm && (
             <input
               type="password"
               placeholder="Conferma password"
+              autoComplete="new-password"
               value={confirmPassword}
               onInput={e => setConfirmPassword(e.target.value)}
             />

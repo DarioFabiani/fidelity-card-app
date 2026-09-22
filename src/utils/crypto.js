@@ -2,7 +2,12 @@
 // No external crypto libraries are used — everything relies on `crypto.subtle`,
 // which is available in all modern browsers under a secure context (https / localhost).
 
-const PBKDF2_ITERATIONS = 100000;
+// OWASP's current recommendation for PBKDF2-HMAC-SHA256. Every place that
+// stores something sealed with a derived key also stores the count, so it can
+// be raised again later without locking anyone out.
+export const PBKDF2_ITERATIONS = 600000;
+// What vaults and backups made before the count was stored were sealed with.
+export const LEGACY_PBKDF2_ITERATIONS = 100000;
 const PBKDF2_HASH = 'SHA-256';
 const AES_KEY_LENGTH = 256; // bits
 const SALT_LENGTH = 16; // bytes
@@ -46,11 +51,11 @@ export function base64ToBuffer(base64) {
 }
 
 /**
- * Derives an AES-256-GCM CryptoKey from a password and salt using PBKDF2-SHA256
- * with 100000 iterations. The password itself is never stored anywhere — only
- * the derived, non-extractable CryptoKey is kept in memory by the caller.
+ * Derives an AES-256-GCM CryptoKey from a password and salt using PBKDF2-SHA256.
+ * The password itself is never stored anywhere — only the derived,
+ * non-extractable CryptoKey is kept in memory by the caller.
  */
-export async function deriveKey(password, saltBytes) {
+export async function deriveKey(password, saltBytes, iterations = PBKDF2_ITERATIONS) {
   const encoder = new TextEncoder();
   const baseKey = await crypto.subtle.importKey(
     'raw',
@@ -63,7 +68,7 @@ export async function deriveKey(password, saltBytes) {
     {
       name: 'PBKDF2',
       salt: saltBytes,
-      iterations: PBKDF2_ITERATIONS,
+      iterations,
       hash: PBKDF2_HASH
     },
     baseKey,

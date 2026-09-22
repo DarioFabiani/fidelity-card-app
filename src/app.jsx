@@ -5,7 +5,7 @@ import { Toast } from './components/Toast';
 import { UnlockScreen } from './components/UnlockScreen';
 import { VaultRecovery } from './components/VaultRecovery';
 import { UpdateBanner } from './components/UpdateBanner';
-import { isEncryptionEnabled, hasEncryptionKey, repairEncryptionState, lock, ENC_ENABLED_KEY } from './db';
+import { isEncryptionEnabled, hasEncryptionKey, repairEncryptionState, lock, ENC_ENABLED_KEY, ENC_SALT_KEY } from './db';
 import { clearShareLinks } from './utils/share';
 import { shouldAutoLock } from './utils/autolock';
 import { onUpdateReady, applyUpdate } from './utils/pwa';
@@ -43,24 +43,6 @@ export function App() {
       .finally(() => setChecked(true));
   }, []);
 
-  // localStorage fires `storage` in the OTHER tabs. Without this, a tab left
-  // open on the list while encryption was switched on elsewhere would keep
-  // reading from a vault it no longer has the key for, and report the cards
-  // as "non trovata" — which reads as data loss.
-  useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key !== ENC_ENABLED_KEY) return;
-      if (e.newValue === 'true' && !hasEncryptionKey()) {
-        setUnlocked(false);
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  const [updateReady, setUpdateReady] = useState(false);
-  useEffect(() => onUpdateReady(() => setUpdateReady(true)), []);
-
   // Drops the key and every share code derived while unlocked. The data on
   // disk is untouched; the router unmounts, so no page keeps decrypted cards
   // on screen behind the unlock form.
@@ -69,6 +51,35 @@ export function App() {
     clearShareLinks();
     setUnlocked(false);
   }, []);
+
+  // localStorage fires `storage` in the OTHER tabs. Without this, a tab left
+  // open on the list while encryption was switched on elsewhere would keep
+  // reading from a vault it no longer has the key for, and report the cards
+  // as "non trovata" — which reads as data loss.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === ENC_ENABLED_KEY) {
+        if (e.newValue === 'true' && !hasEncryptionKey()) {
+          setUnlocked(false);
+        } else if (e.newValue === null) {
+          // Turned off elsewhere: the cards are plain again. A stale key kept
+          // here would seal the next save and lock the vault back up.
+          lock();
+          clearShareLinks();
+          setUnlocked(true);
+        }
+      } else if (e.key === ENC_SALT_KEY && e.oldValue && e.newValue && hasEncryptionKey()) {
+        // Password changed in another tab: the key held here is the old one,
+        // and a card saved with it would be unreadable under the new one.
+        lockVault();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [lockVault]);
+
+  const [updateReady, setUpdateReady] = useState(false);
+  useEffect(() => onUpdateReady(() => setUpdateReady(true)), []);
 
   // Auto-lock: the key otherwise stayed in memory for as long as the app was
   // alive — on a phone, often days — so a vault "protected by password" was

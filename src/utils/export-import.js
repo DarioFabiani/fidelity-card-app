@@ -1,10 +1,18 @@
 import { exportCards, importCards, listCardIds } from '../db';
 import { normalizeColor } from './color';
 import { normalizeFormat } from '../constants/barcodeFormats';
-import { deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer } from './crypto';
+import {
+  deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer,
+  PBKDF2_ITERATIONS, LEGACY_PBKDF2_ITERATIONS
+} from './crypto';
 
 const EXPORT_FORMAT = 'fidelity-card-app';
-const EXPORT_VERSION = 2;
+const EXPORT_VERSION = 3;
+
+// Bounds for the iteration count read from a backup. The file is outside
+// input: an absurd count would freeze the import on key derivation.
+const MIN_IMPORT_ITERATIONS = 10000;
+const MAX_IMPORT_ITERATIONS = 5000000;
 
 /**
  * Rebuilds each card from known fields only, rather than trusting the file's
@@ -70,13 +78,15 @@ export async function downloadExport(password) {
 
   if (password) {
     const salt = generateSalt();
-    const key = await deriveKey(password, salt);
+    const key = await deriveKey(password, salt, PBKDF2_ITERATIONS);
     const data = await encryptJSON(cards, key);
     saveFile(JSON.stringify({
       format: EXPORT_FORMAT,
       version: EXPORT_VERSION,
       encrypted: true,
       salt: bufferToBase64(salt),
+      // Stored so a backup stays readable if the default is raised again.
+      iterations: PBKDF2_ITERATIONS,
       data
     }, null, 2));
   } else {
@@ -131,7 +141,12 @@ export function pickImportFile() {
         const parsed = JSON.parse(await file.text());
         if (parsed && parsed.encrypted) {
           if (!parsed.salt || !parsed.data) throw new Error('File di backup corrotto');
-          done({ encrypted: true, salt: parsed.salt, data: parsed.data });
+          done({
+            encrypted: true,
+            salt: parsed.salt,
+            data: parsed.data,
+            iterations: backupIterations(parsed.iterations)
+          });
         } else {
           done({ encrypted: false, cards: validateCards(parsed) });
         }
@@ -143,10 +158,22 @@ export function pickImportFile() {
   });
 }
 
+/**
+ * Iteration count of an encrypted backup. Files written before the count was
+ * stored (version 2) used the legacy value.
+ */
+export function backupIterations(value) {
+  if (value === undefined) return LEGACY_PBKDF2_ITERATIONS;
+  if (!Number.isInteger(value) || value < MIN_IMPORT_ITERATIONS || value > MAX_IMPORT_ITERATIONS) {
+    throw new Error('File di backup corrotto');
+  }
+  return value;
+}
+
 /** Unseals an encrypted backup. Returns null when the password is wrong. */
 export async function decryptImport(payload, password) {
   try {
-    const key = await deriveKey(password, base64ToBuffer(payload.salt));
+    const key = await deriveKey(password, base64ToBuffer(payload.salt), payload.iterations ?? LEGACY_PBKDF2_ITERATIONS);
     return validateCards(await decryptJSON(payload.data, key));
   } catch {
     return null;
