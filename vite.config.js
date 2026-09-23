@@ -136,6 +136,25 @@ export default defineConfig({
               cacheName: 'barcode-render',
               expiration: { maxEntries: 6 }
             }
+          },
+          {
+            // Shop logos, so a card shows its logo offline once seen online.
+            // An <img> fetch is no-cors, so the response is opaque (status 0)
+            // and has to be allowed explicitly; a 404 globe gets cached too,
+            // but ProviderLogo hides it by size.
+            urlPattern: ({ url }) => url.origin === 'https://www.google.com' && url.pathname === '/s2/favicons',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'provider-logos',
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: {
+                maxEntries: 80,
+                maxAgeSeconds: 60 * 60 * 24 * 90,
+                // Chrome counts each opaque response as several MB of quota:
+                // never let logos crowd out the app.
+                purgeOnQuotaError: true
+              }
+            }
           }
         ]
       }
