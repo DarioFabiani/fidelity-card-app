@@ -4,6 +4,7 @@ let nextId = 0;
 // Resolves once the history entry of the last overlay closed from the UI has
 // been popped. See afterOverlayClosed().
 let pendingBack = Promise.resolve();
+let backPending = false;
 
 /**
  * Makes the phone's Back button close an overlay (dialog, sheet, scanner,
@@ -44,15 +45,30 @@ export function useBackToClose(active, onClose) {
       // Still on our entry: closed from the UI, so consume it. Anything else
       // (Back already popped it, or the app navigated on top) leaves it be.
       if (!poppedByBack && window.history.state?.overlay === id) {
-        pendingBack = new Promise(resolve => {
-          window.addEventListener('popstate', () => resolve(), { once: true });
+        backPending = true;
+        const mine = pendingBack = new Promise(resolve => {
+          const done = () => {
+            window.removeEventListener('popstate', done);
+            if (pendingBack === mine) backPending = false;
+            resolve();
+          };
+          window.addEventListener('popstate', done);
           // Belt and braces: never leave a caller waiting forever.
-          setTimeout(resolve, 500);
+          setTimeout(done, 500);
         });
         window.history.back();
       }
     };
   }, [active]);
+}
+
+/**
+ * Whether an overlay closed from the UI is still popping its history entry.
+ * Pushing an entry meanwhile would put it on top of the overlay's, and the
+ * pending Back would then pop the new one instead.
+ */
+export function overlayClosing() {
+  return backPending;
 }
 
 /**
