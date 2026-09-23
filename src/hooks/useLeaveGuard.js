@@ -1,5 +1,5 @@
 import { useState, useRef, useLayoutEffect } from 'preact/hooks';
-import { afterOverlayClosed } from './useBackToClose';
+import { afterOverlayClosed, overlayClosing } from './useBackToClose';
 
 let nextId = 0;
 
@@ -62,7 +62,10 @@ export function useLeaveGuard(leave) {
       window.addEventListener('popstate', onPop);
     };
 
-    if (returningFromDialog) afterOverlayClosed().then(arm);
+    // Likewise after a scan: the number arrives in the same render that
+    // closes the scanner, whose entry is still being popped. Arming on top of
+    // it let that Back pop the guard instead, asking "Scartare?" at once.
+    if (returningFromDialog || overlayClosing()) afterOverlayClosed().then(arm);
     else arm();
 
     return () => {
