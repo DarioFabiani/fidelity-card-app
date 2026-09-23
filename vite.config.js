@@ -60,7 +60,7 @@ export default defineConfig({
       // See src/index.jsx: a new build waits for the user instead of
       // reloading the page under them.
       registerType: 'prompt',
-      includeAssets: ['favicon.ico', 'icons/*.png', 'icons/icon.svg'],
+      includeAssets: ['favicon.ico', 'icons/*.png'],
       manifest: {
         name: 'Le Mie Carte Fedeltà',
         short_name: 'Carte Fedeltà',
