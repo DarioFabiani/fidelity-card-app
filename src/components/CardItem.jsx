@@ -2,6 +2,7 @@ import { route } from 'preact-router';
 import { getContrastColor, cardGradient, DEFAULT_CARD_COLOR } from '../utils/color';
 import { formatCardNumber } from '../utils/format';
 import { StarIcon } from './icons';
+import { ProviderLogo } from './ProviderLogo';
 
 export function CardItem({ card, onToggleFavorite, onDelete }) {
   const color = card.color || DEFAULT_CARD_COLOR;
@@ -45,6 +46,7 @@ export function CardItem({ card, onToggleFavorite, onDelete }) {
         style={{ background: cardGradient(color), color: textColor }}
         onClick={() => route(`/fidelity-card-app/card/${card.id}`)}
       >
+        <ProviderLogo name={card.providerName} />
         <div class="card-item-content">
           <span class="card-provider">{card.providerName}</span>
           <span class="card-number">{formatCardNumber(card.cardNumber)}</span>

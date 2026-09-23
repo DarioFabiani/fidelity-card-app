@@ -60,7 +60,7 @@ export default defineConfig({
       // See src/index.jsx: a new build waits for the user instead of
       // reloading the page under them.
       registerType: 'prompt',
-      includeAssets: ['favicon.ico', 'icons/*.png', 'icons/icon.svg'],
+      includeAssets: ['favicon.ico', 'icons/*.png'],
       manifest: {
         name: 'Le Mie Carte Fedeltà',
         short_name: 'Carte Fedeltà',
@@ -135,6 +135,25 @@ export default defineConfig({
             options: {
               cacheName: 'barcode-render',
               expiration: { maxEntries: 6 }
+            }
+          },
+          {
+            // Shop logos, so a card shows its logo offline once seen online.
+            // An <img> fetch is no-cors, so the response is opaque (status 0)
+            // and has to be allowed explicitly; a 404 globe gets cached too,
+            // but ProviderLogo hides it by size.
+            urlPattern: ({ url }) => url.origin === 'https://www.google.com' && url.pathname === '/s2/favicons',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'provider-logos',
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: {
+                maxEntries: 80,
+                maxAgeSeconds: 60 * 60 * 24 * 90,
+                // Chrome counts each opaque response as several MB of quota:
+                // never let logos crowd out the app.
+                purgeOnQuotaError: true
+              }
             }
           }
         ]

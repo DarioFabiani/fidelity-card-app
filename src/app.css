@@ -337,6 +337,30 @@ body.has-install-banner {
   transform: scale(0.985);
   box-shadow: var(--shadow-sm);
 }
+/* Favicons are drawn for a light page: a white tile keeps them legible on any
+   card colour, and keeps a small, often low-res image looking deliberate. */
+.provider-logo {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.provider-logo[hidden] {
+  display: none;
+}
+.provider-logo img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.card-item .provider-logo {
+  margin-right: var(--space-3);
+}
 .card-item-content {
   display: flex;
   flex-direction: column;

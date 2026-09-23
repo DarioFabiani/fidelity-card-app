@@ -1,4 +1,5 @@
 import { getContrastColor, cardGradient } from '../utils/color';
+import { ProviderLogo } from './ProviderLogo';
 
 /**
  * Colour banner shared by ViewCard and SharedCard: gradient background tinted
@@ -9,6 +10,7 @@ import { getContrastColor, cardGradient } from '../utils/color';
 export function CardBanner({ color, name, number, action }) {
   return (
     <div class="card-banner" style={{ background: cardGradient(color), color: getContrastColor(color) }}>
+      <ProviderLogo name={name} class="card-banner-logo" />
       {action}
       <h2 class="card-banner-name" title={name}>{name}</h2>
       <p class="card-banner-number">{number}</p>
@@ -33,6 +35,11 @@ export function CardBanner({ color, name, number, action }) {
           color: inherit;
           -webkit-tap-highlight-color: transparent;
           transition: transform 0.12s ease;
+        }
+        .card-banner-logo {
+          position: absolute;
+          top: var(--space-3);
+          left: var(--space-3);
         }
         .card-banner-fav:active {
           transform: scale(0.85);
