@@ -26,11 +26,50 @@ function sectionLetter(name) {
   return upper >= 'A' && upper <= 'Z' ? upper : '#';
 }
 
+/** Last time the card was shown; cards never opened count from creation. */
+function lastUsed(card) {
+  return card.lastUsedAt || card.createdAt || 0;
+}
+
 /**
  * Applies the chosen ordering. In alphabetical mode the list is also cut into
- * lettered sections; "recent" keeps the newest-first order the db returns and
- * stays a single flat run.
+ * lettered sections; "recent" puts the most recently used cards first (the
+ * ones reached at the till, not merely the newest) and stays a single flat run.
  */
+export function buildSections(cards, mode) {
+  const byName = (a, b) =>
+    (a.providerName || '').localeCompare(b.providerName || '', 'it', { sensitivity: 'base' });
+
+  const byUse = (a, b) => lastUsed(b) - lastUsed(a);
+
+  // Favourites are pulled out first and always sit on top, whichever
+  // ordering is active — they're the cards reached most often.
+  const favorites = cards.filter(c => c.favorite).sort(byUse);
+  const rest = cards.filter(c => !c.favorite).sort(byUse);
+
+  const head = favorites.length
+    ? [{ key: 'fav', label: 'Preferiti', starred: true, cards: mode === SORT_ALPHA ? [...favorites].sort(byName) : favorites }]
+    : [];
+
+  if (mode !== SORT_ALPHA) {
+    return rest.length
+      ? [...head, { key: 'all', label: favorites.length ? 'Tutte le altre' : null, cards: rest }]
+      : head;
+  }
+
+  const grouped = [];
+  for (const card of [...rest].sort(byName)) {
+    const letter = sectionLetter(card.providerName);
+    const last = grouped[grouped.length - 1];
+    if (last && last.key === letter) {
+      last.cards.push(card);
+    } else {
+      grouped.push({ key: letter, label: letter, cards: [card] });
+    }
+  }
+  return [...head, ...grouped];
+}
+
 export function useSortedCards(cards) {
   const [mode, setModeState] = useState(readStoredMode);
 
@@ -43,37 +82,7 @@ export function useSortedCards(cards) {
     }
   }, []);
 
-  const sections = useMemo(() => {
-    const byName = (a, b) =>
-      (a.providerName || '').localeCompare(b.providerName || '', 'it', { sensitivity: 'base' });
-
-    // Favourites are pulled out first and always sit on top, whichever
-    // ordering is active — they're the cards reached most often.
-    const favorites = cards.filter(c => c.favorite);
-    const rest = cards.filter(c => !c.favorite);
-
-    const head = favorites.length
-      ? [{ key: 'fav', label: 'Preferiti', starred: true, cards: mode === SORT_ALPHA ? [...favorites].sort(byName) : favorites }]
-      : [];
-
-    if (mode !== SORT_ALPHA) {
-      return rest.length
-        ? [...head, { key: 'all', label: favorites.length ? 'Tutte le altre' : null, cards: rest }]
-        : head;
-    }
-
-    const grouped = [];
-    for (const card of [...rest].sort(byName)) {
-      const letter = sectionLetter(card.providerName);
-      const last = grouped[grouped.length - 1];
-      if (last && last.key === letter) {
-        last.cards.push(card);
-      } else {
-        grouped.push({ key: letter, label: letter, cards: [card] });
-      }
-    }
-    return [...head, ...grouped];
-  }, [cards, mode]);
+  const sections = useMemo(() => buildSections(cards, mode), [cards, mode]);
 
   return { mode, setMode, sections };
 }

@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { useBackToClose } from '../hooks/useBackToClose';
 
 /**
  * Modal that collects a password. `onSubmit` may return an error message
@@ -10,20 +11,29 @@ export function PasswordPrompt({
   description,
   submitLabel = 'Conferma',
   withConfirm = false,
+  // Also asks for the password in use now; passed to onSubmit as 2nd arg.
+  withCurrent = false,
+  newPasswordLabel = 'Password',
   minLength = 0,
   onSubmit,
   onClose
 }) {
+  const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  useBackToClose(true, () => { if (!busy) onClose(); });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (busy) return;
     setError('');
 
+    if (withCurrent && !currentPassword) {
+      setError('Inserisci la password attuale');
+      return;
+    }
     if (minLength && password.length < minLength) {
       setError(`La password deve avere almeno ${minLength} caratteri`);
       return;
@@ -35,7 +45,7 @@ export function PasswordPrompt({
 
     setBusy(true);
     try {
-      const failure = await onSubmit(password);
+      const failure = await onSubmit(password, currentPassword);
       if (failure) setError(failure);
     } finally {
       setBusy(false);
@@ -44,22 +54,34 @@ export function PasswordPrompt({
 
   return (
     <div class="modal-overlay" onClick={busy ? undefined : onClose}>
-      <div class="modal-content" onClick={e => e.stopPropagation()}>
-        <h3 class="pw-title">{title}</h3>
+      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="pw-title" onClick={e => e.stopPropagation()}>
+        <h3 class="pw-title" id="pw-title">{title}</h3>
         {description && <p class="pw-desc">{description}</p>}
 
         <form onSubmit={handleSubmit} class="pw-form">
+          {withCurrent && (
+            <input
+              type="password"
+              placeholder="Password attuale"
+              autoComplete="current-password"
+              value={currentPassword}
+              onInput={e => setCurrentPassword(e.target.value)}
+              autoFocus
+            />
+          )}
           <input
             type="password"
-            placeholder="Password"
+            placeholder={newPasswordLabel}
+            autoComplete={withConfirm ? 'new-password' : 'current-password'}
             value={password}
             onInput={e => setPassword(e.target.value)}
-            autoFocus
+            autoFocus={!withCurrent}
           />
           {withConfirm && (
             <input
               type="password"
               placeholder="Conferma password"
+              autoComplete="new-password"
               value={confirmPassword}
               onInput={e => setConfirmPassword(e.target.value)}
             />

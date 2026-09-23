@@ -1,12 +1,12 @@
 import { route } from 'preact-router';
 import { useState } from 'preact/hooks';
-import { decodeSharedCard, isValidShareData } from '../utils/share';
-import { addCard } from '../db';
+import { decodeSharedCard, isValidShareData, hasIterationCount } from '../utils/share';
+import { addCard, getAllCards } from '../db';
 import { BarcodeDisplay } from '../components/BarcodeDisplay';
 import { CardBanner } from '../components/CardBanner';
 import { PageMessage } from '../components/PageMessage';
 import { DEFAULT_CARD_COLOR } from '../utils/color';
-import { formatCardNumber } from '../utils/format';
+import { formatCardNumber, sameCardNumber, normalizeCardNumber } from '../utils/format';
 
 export function SharedCard({ data, showToast }) {
   const [code, setCode] = useState('');
@@ -15,6 +15,9 @@ export function SharedCard({ data, showToast }) {
   const [codeError, setCodeError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // A card already in the vault with the same number: saving again would
+  // only create a duplicate, so the page offers to open that one instead.
+  const [existing, setExisting] = useState(null);
 
   const validLink = isValidShareData(data);
 
@@ -28,6 +31,12 @@ export function SharedCard({ data, showToast }) {
     </div>
   );
 
+  // A link cut short by a chat app can still look well-formed; saying only
+  // "wrong code" sent the recipient re-typing a code that was right.
+  const wrongCodeMessage = hasIterationCount(data)
+    ? 'Codice errato. Controlla e riprova.'
+    : 'Codice errato, oppure il link è arrivato incompleto. Controlla il codice o chiedi di reinviare il link.';
+
   const handleUnlock = async (e) => {
     e.preventDefault();
     if (!code || unlocking) return;
@@ -37,11 +46,17 @@ export function SharedCard({ data, showToast }) {
       const decoded = await decodeSharedCard(data, code);
       if (decoded) {
         setCard(decoded);
+        try {
+          const all = await getAllCards();
+          setExisting(all.find(c => !c._unreadable && sameCardNumber(c.cardNumber, decoded.cardNumber)) || null);
+        } catch {
+          // Only the duplicate hint is lost.
+        }
       } else {
-        setCodeError('Codice errato. Controlla e riprova.');
+        setCodeError(wrongCodeMessage);
       }
     } catch {
-      setCodeError('Codice errato. Controlla e riprova.');
+      setCodeError(wrongCodeMessage);
     } finally {
       setUnlocking(false);
     }
@@ -51,7 +66,7 @@ export function SharedCard({ data, showToast }) {
     if (!card) return;
     setSaving(true);
     try {
-      await addCard(card);
+      setExisting(await addCard(card));
       setSaved(true);
       showToast('Carta salvata!');
     } catch {
@@ -151,7 +166,7 @@ export function SharedCard({ data, showToast }) {
       />
 
       <div style={{ marginTop: 'var(--space-4)' }}>
-        <BarcodeDisplay value={card.cardNumber} format={card.barcodeFormat} fullscreenable={false} />
+        <BarcodeDisplay value={normalizeCardNumber(card.cardNumber)} format={card.barcodeFormat} fullscreenable={false} />
       </div>
 
       {card.notes && (
@@ -161,10 +176,22 @@ export function SharedCard({ data, showToast }) {
       )}
 
       <div style={{ marginTop: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        {saved ? (
-          <button class="btn btn-primary btn-block" onClick={() => route('/fidelity-card-app/')}>
-            Vai alle mie carte
-          </button>
+        {existing && !saved && (
+          <p class="shared-card-duplicate">
+            Hai già questa carta tra le tue{existing.providerName !== card.providerName ? ` (come "${existing.providerName}")` : ''}.
+          </p>
+        )}
+        {saved || existing ? (
+          <>
+            <button class="btn btn-primary btn-block" onClick={() => route(`/fidelity-card-app/card/${existing.id}`, true)}>
+              Apri la carta salvata
+            </button>
+            {!saved && (
+              <button class="btn btn-outline btn-block" onClick={handleSave} disabled={saving}>
+                {saving ? 'Salvataggio...' : 'Salva comunque una copia'}
+              </button>
+            )}
+          </>
         ) : (
           <button class="btn btn-primary btn-block" onClick={handleSave} disabled={saving}>
             {saving ? 'Salvataggio...' : 'Salva questa carta'}
@@ -180,6 +207,13 @@ export function SharedCard({ data, showToast }) {
           border: 1px solid var(--color-border);
           border-radius: var(--radius);
           font-size: var(--text-sm);
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+        .shared-card-duplicate {
+          font-size: var(--text-sm);
+          color: var(--color-text-secondary);
+          text-align: center;
         }
       `}</style>
     </div>

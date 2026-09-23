@@ -28,7 +28,8 @@ export function SortToggle({ mode, onChange }) {
           background: color-mix(in srgb, var(--color-text) 7%, transparent);
         }
         .sort-option {
-          padding: 6px 14px;
+          min-height: 38px;
+          padding: 6px 16px;
           border-radius: 999px;
           font-size: var(--text-sm);
           font-weight: 600;

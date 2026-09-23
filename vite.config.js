@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { VitePWA } from 'vite-plugin-pwa';
-import { copyFileSync, existsSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8'));
 
 /**
  * GitHub Pages has no SPA fallback: a deep link like /shared?data=... is
@@ -30,6 +31,15 @@ function spaFallback() {
 
 export default defineConfig({
   base: '/fidelity-card-app/',
+  define: {
+    // Shown in Settings, so it always matches the build actually running.
+    __APP_VERSION__: JSON.stringify(version)
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.js'],
+    testTimeout: 30000
+  },
   build: {
     rollupOptions: {
       output: {
@@ -47,7 +57,9 @@ export default defineConfig({
     spaFallback(),
     preact(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // See src/index.jsx: a new build waits for the user instead of
+      // reloading the page under them.
+      registerType: 'prompt',
       includeAssets: ['favicon.ico', 'icons/*.png', 'icons/icon.svg'],
       manifest: {
         name: 'Le Mie Carte Fedeltà',
@@ -59,6 +71,16 @@ export default defineConfig({
         orientation: 'portrait',
         scope: '/fidelity-card-app/',
         start_url: '/fidelity-card-app/',
+        lang: 'it',
+        // Long-press on the home-screen icon: straight to adding a card.
+        shortcuts: [
+          {
+            name: 'Aggiungi carta',
+            short_name: 'Aggiungi',
+            url: '/fidelity-card-app/add',
+            icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }]
+          }
+        ],
         icons: [
           {
             src: 'icons/icon-192.png',
@@ -79,6 +101,11 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Lets the worker take the page over on its very first install, so
+        // the lazily loaded barcode chunks are served from the precache even
+        // if the network drops during that first visit. Later builds still
+        // wait for "Aggiorna" (see src/index.jsx).
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Only the ZXing scanner (~415 kB) stays out of the precache: it is
         // optional (a number can always be typed in) and CardForm already
@@ -100,10 +127,9 @@ export default defineConfig({
             }
           },
           {
-            // Kept alongside the precache, not instead of it. The precache
-            // covers the current build; this keeps the PREVIOUS build's chunk
-            // reachable for a tab that was already open when a new version was
-            // deployed, whose hashed filename no longer exists on the server.
+            // Safety net only: these chunks are precached, and the precache
+            // route answers first. A tab on an older build keeps its chunks
+            // anyway, since a waiting worker no longer takes over by itself.
             urlPattern: /\/assets\/(barcode|qrcode)-.*\.js$/,
             handler: 'CacheFirst',
             options: {

@@ -1,16 +1,20 @@
 import { useState } from 'preact/hooks';
 import { route } from 'preact-router';
 import { downloadExport, pickImportFile, decryptImport, commitImport } from '../utils/export-import';
-import { isEncryptionEnabled, enableEncryption, disableEncryption } from '../db';
+import { isEncryptionEnabled, enableEncryption, disableEncryption, changePassword } from '../db';
 import { PageHeader } from '../components/PageHeader';
 import { PasswordPrompt } from '../components/PasswordPrompt';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LockIcon } from '../components/icons';
+import { AUTOLOCK_OPTIONS, getAutoLockMinutes, setAutoLockMinutes } from '../utils/autolock';
 
-function importSummary({ added, updated }) {
+function importSummary({ added, updated, kept = 0 }) {
   const parts = [];
   if (added) parts.push(`${added} ${added === 1 ? 'carta importata' : 'carte importate'}`);
   if (updated) parts.push(`${updated} ${updated === 1 ? 'aggiornata' : 'aggiornate'}`);
+  if (kept) {
+    parts.push(`${kept} già ${kept === 1 ? 'presente' : 'presenti'} (tenuta la versione più recente)`);
+  }
   return parts.length ? parts.join(', ') : 'Nessuna carta importata';
 }
 
@@ -22,6 +26,8 @@ export function Settings({ showToast }) {
   const [confirmDisable, setConfirmDisable] = useState(false);
   const [askExportPassword, setAskExportPassword] = useState(false);
   const [pendingImport, setPendingImport] = useState(null);
+  const [autoLock, setAutoLock] = useState(getAutoLockMinutes);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   const runExport = async (password) => {
     setExporting(true);
@@ -132,12 +138,45 @@ export function Settings({ showToast }) {
             <LockIcon size={20} />
           </button>
         )}
+
+        {encryptionEnabled && (
+          <button class="settings-item" onClick={() => setShowChangePassword(true)}>
+            <div class="settings-item-content">
+              <span class="settings-item-label">Cambia password</span>
+              <span class="settings-item-desc">Ricifra le carte con una nuova master password</span>
+            </div>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.7 12.3 21 2" /><path d="m16 7 3 3" /><path d="m19 4 2 2" />
+            </svg>
+          </button>
+        )}
+
+        {encryptionEnabled && (
+          <label class="settings-item settings-select">
+            <div class="settings-item-content">
+              <span class="settings-item-label">Blocco automatico</span>
+              <span class="settings-item-desc">Chiede di nuovo la password dopo che l'app è rimasta in background</span>
+            </div>
+            <select
+              value={autoLock}
+              onChange={e => {
+                const minutes = Number(e.target.value);
+                setAutoLock(minutes);
+                setAutoLockMinutes(minutes);
+              }}
+            >
+              {AUTOLOCK_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div class="settings-section">
         <h3 class="label-caps settings-section-title">Info</h3>
         <div class="settings-about">
-          <p><strong>Carte Fedeltà</strong> v1.0.0</p>
+          <p><strong>Carte Fedeltà</strong> v{__APP_VERSION__}</p>
           <p>Gestisci le tue carte fedeltà dal telefono.</p>
           <p>
             {encryptionEnabled
@@ -153,7 +192,7 @@ export function Settings({ showToast }) {
           description="Scegli una master password. Verrà usata per cifrare i dati delle carte sul dispositivo (AES-256-GCM) e non viene mai salvata: se la dimentichi non potrai più recuperare i dati cifrati."
           submitLabel="Attiva cifratura"
           withConfirm
-          minLength={6}
+          minLength={8}
           onClose={() => setShowSetup(false)}
           onSubmit={async (password) => {
             try {
@@ -170,13 +209,37 @@ export function Settings({ showToast }) {
         />
       )}
 
+      {showChangePassword && (
+        <PasswordPrompt
+          title="Cambia password"
+          description="Le carte vengono ricifrate con la nuova password. Anche i backup protetti già esportati restano apribili solo con la password usata per crearli."
+          submitLabel="Cambia password"
+          withCurrent
+          withConfirm
+          newPasswordLabel="Nuova password"
+          minLength={8}
+          onClose={() => setShowChangePassword(false)}
+          onSubmit={async (password, current) => {
+            if (password === current) return 'La nuova password è uguale a quella attuale';
+            try {
+              const ok = await changePassword(current, password);
+              if (!ok) return 'Password attuale errata';
+            } catch (err) {
+              return err?.message || 'Errore nel cambio password';
+            }
+            setShowChangePassword(false);
+            showToast('Password cambiata');
+          }}
+        />
+      )}
+
       {askExportPassword && (
         <PasswordPrompt
           title="Proteggi il backup"
           description="Il file di backup lascia il dispositivo, quindi viene cifrato con una password. Può essere la stessa master password o un'altra: ti servirà per reimportarlo."
           submitLabel="Esporta"
           withConfirm
-          minLength={6}
+          minLength={8}
           onClose={() => setAskExportPassword(false)}
           onSubmit={async (password) => {
             setAskExportPassword(false);
@@ -187,8 +250,10 @@ export function Settings({ showToast }) {
 
       {pendingImport && (
         <PasswordPrompt
-          title="Backup protetto"
-          description="Questo backup è cifrato. Inserisci la password usata al momento dell'esportazione."
+          title={pendingImport.raw ? 'Copia dei dati cifrata' : 'Backup protetto'}
+          description={pendingImport.raw
+            ? 'Questa copia contiene carte cifrate. Inserisci la master password che era in uso quando è stata salvata.'
+            : 'Questo backup è cifrato. Inserisci la password usata al momento dell\'esportazione.'}
           submitLabel="Importa"
           onClose={() => setPendingImport(null)}
           onSubmit={async (password) => {
@@ -240,6 +305,15 @@ export function Settings({ showToast }) {
           display: flex;
           flex-direction: column;
           gap: 2px;
+        }
+        .settings-select {
+          flex-wrap: wrap;
+          gap: var(--space-3);
+          cursor: default;
+        }
+        .settings-select select {
+          width: auto;
+          padding: 8px 10px;
         }
         .settings-item-label {
           font-size: var(--text-base);

@@ -1,9 +1,17 @@
-import { useState } from 'preact/hooks';
+import { useState, useMemo, useRef, useLayoutEffect } from 'preact/hooks';
 import { PROVIDERS } from '../constants/providers';
-import { BARCODE_FORMATS, suggestFormat } from '../constants/barcodeFormats';
-import { CARD_COLORS, DEFAULT_CARD_COLOR } from '../utils/color';
+import { BARCODE_FORMATS, suggestFormat, isAlphanumericFormat } from '../constants/barcodeFormats';
+import { CARD_COLORS, CARD_COLOR_NAMES, DEFAULT_CARD_COLOR, colorForName } from '../utils/color';
+import { foldText } from '../hooks/useSearch';
+import { sameCardNumber, normalizeCardNumber } from '../utils/format';
+import { BarcodeDisplay } from './BarcodeDisplay';
 
-export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
+/**
+ * `existingCards` (optional) lets the form warn about a card already saved
+ * with the same number — the usual way to end up with duplicates is saving a
+ * card someone shared, or re-adding one after forgetting it was there.
+ */
+export function CardForm({ initial, onSubmit, submitLabel = 'Salva', existingCards = [], onDirtyChange }) {
   const [providerName, setProviderName] = useState(initial?.providerName || '');
   const [cardNumber, setCardNumber] = useState(initial?.cardNumber || '');
   const [barcodeFormat, setBarcodeFormat] = useState(initial?.barcodeFormat || 'CODE128');
@@ -11,16 +19,56 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   // number: re-guessing on every keystroke silently reverted the choice.
   const [formatPickedByUser, setFormatPickedByUser] = useState(false);
   const [color, setColor] = useState(initial?.color || DEFAULT_CARD_COLOR);
+  // Until a colour is chosen (or comes with a suggested shop), a new card
+  // takes one from its name.
+  const [colorPicked, setColorPicked] = useState(Boolean(initial));
   const [notes, setNotes] = useState(initial?.notes || '');
   const [suggestions, setSuggestions] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [ScannerComponent, setScannerComponent] = useState(null);
   const [scannerError, setScannerError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  // Which keyboard the number field asks for. Kept as explicit state rather
+  // than derived from the guessed format: deriving it flipped the keyboard
+  // mid-typing as soon as the digits happened to form a valid EAN.
+  const [lettersKeyboard, setLettersKeyboard] = useState(
+    () => /[^0-9\s]/.test(initial?.cardNumber || '') ||
+      ['CODE39', 'QR_CODE', 'CODABAR'].includes(initial?.barcodeFormat)
+  );
+  const numberRef = useRef(null);
+
+  const toggleKeyboard = () => {
+    setLettersKeyboard(v => !v);
+    // Mobile keyboards only pick up a new inputmode on the next focus.
+    const input = numberRef.current;
+    if (input && document.activeElement === input) {
+      input.blur();
+      setTimeout(() => input.focus(), 0);
+    }
+  };
+
+  // Lets the page ask before throwing away what was typed.
+  const dirty =
+    providerName !== (initial?.providerName || '') ||
+    cardNumber !== (initial?.cardNumber || '') ||
+    notes !== (initial?.notes || '') ||
+    (initial ? barcodeFormat !== (initial.barcodeFormat || 'CODE128') || color !== (initial.color || DEFAULT_CARD_COLOR) : false);
+  // Layout effect: reported before the next paint, so a Back pressed right
+  // after typing is already guarded.
+  useLayoutEffect(() => { onDirtyChange?.(dirty); }, [dirty]);
+
+  const duplicate = useMemo(
+    () => existingCards.find(c => c.id !== initial?.id && !c._unreadable && sameCardNumber(c.cardNumber, cardNumber)),
+    [existingCards, cardNumber, initial]
+  );
 
   const handleScanned = (text, format) => {
     setCardNumber(text);
     setBarcodeFormat(format);
+    // The scanner read the real format off the card: don't let a later
+    // correction to the number re-guess it.
+    setFormatPickedByUser(true);
     setScannerOpen(false);
   };
 
@@ -43,9 +91,10 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
 
   const handleProviderInput = (value) => {
     setProviderName(value);
+    if (!colorPicked) setColor(colorForName(value));
     if (value.length >= 1) {
-      const q = value.toLowerCase();
-      const matches = PROVIDERS.filter(p => p.name.toLowerCase().includes(q));
+      const q = foldText(value);
+      const matches = PROVIDERS.filter(p => foldText(p.name).includes(q));
       setSuggestions(matches.slice(0, 5));
     } else {
       setSuggestions([]);
@@ -55,6 +104,7 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
   const selectProvider = (provider) => {
     setProviderName(provider.name);
     setColor(provider.color);
+    setColorPicked(true);
     setBarcodeFormat(provider.barcodeFormat);
     // The provider carries the format its cards actually use — that is a
     // choice as explicit as picking from the menu, so stop guessing from the
@@ -66,6 +116,8 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
 
   const handleCardNumberInput = (value) => {
     setCardNumber(value);
+    // Letters pasted in: the digits-only keypad would not let them be edited.
+    if (/[^0-9\s]/.test(value)) setLettersKeyboard(true);
     if (!initial && !formatPickedByUser) {
       setBarcodeFormat(suggestFormat(value));
     }
@@ -73,16 +125,22 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!providerName.trim() || !cardNumber.trim()) return;
+    if (!providerName.trim() || !cardNumber.trim() || submitting) return;
     setSubmitting(true);
+    setSubmitError('');
     try {
       await onSubmit({
         providerName: providerName.trim(),
-        cardNumber: cardNumber.trim(),
+        cardNumber: normalizeCardNumber(cardNumber),
         barcodeFormat,
         color,
         notes: notes.trim()
       });
+    } catch (err) {
+      // Without this a failed write left the button spinning back to its
+      // label with no word on why nothing happened — and what was typed
+      // looked saved.
+      setSubmitError(err?.message ? `Salvataggio non riuscito: ${err.message}` : 'Salvataggio non riuscito. Riprova.');
     } finally {
       setSubmitting(false);
     }
@@ -119,13 +177,26 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
         <label class="label-caps form-label">Numero carta *</label>
         <div class="card-number-row">
           <input
+            ref={numberRef}
             type="text"
             value={cardNumber}
             onInput={e => handleCardNumberInput(e.target.value)}
             placeholder="Numero o codice a barre"
             required
-            inputMode="numeric"
+            inputMode={lettersKeyboard ? 'text' : 'numeric'}
+            autoCapitalize="characters"
+            autoComplete="off"
+            spellcheck={false}
           />
+          <button
+            type="button"
+            class="scan-btn keyboard-btn"
+            onClick={toggleKeyboard}
+            aria-label={lettersKeyboard ? 'Usa il tastierino numerico' : 'Usa la tastiera con lettere'}
+            title={lettersKeyboard ? 'Tastierino numerico' : 'Tastiera con lettere'}
+          >
+            {lettersKeyboard ? '123' : 'ABC'}
+          </button>
           <button
             type="button"
             class="scan-btn"
@@ -143,6 +214,12 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
 
       {scannerError && <p class="scan-error">{scannerError}</p>}
 
+      {duplicate && (
+        <p class="form-warning">
+          Hai già una carta con questo numero: <strong>{duplicate.providerName}</strong>.
+        </p>
+      )}
+
       {scannerOpen && ScannerComponent && (
         <ScannerComponent
           onDetected={handleScanned}
@@ -154,7 +231,12 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
         <label class="label-caps form-label">Formato codice a barre</label>
         <select
           value={barcodeFormat}
-          onChange={e => { setBarcodeFormat(e.target.value); setFormatPickedByUser(true); }}
+          onChange={e => {
+            setBarcodeFormat(e.target.value);
+            setFormatPickedByUser(true);
+            // Picked a format that carries letters: offer the letters.
+            if (isAlphanumericFormat(e.target.value) && e.target.value !== 'CODE128') setLettersKeyboard(true);
+          }}
         >
           {BARCODE_FORMATS.map(f => (
             <option key={f.value} value={f.value}>
@@ -163,6 +245,13 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
           ))}
         </select>
       </div>
+
+      {cardNumber.trim() && (
+        <div class="form-group">
+          <span class="label-caps form-label">Anteprima</span>
+          <BarcodeDisplay value={normalizeCardNumber(cardNumber)} format={barcodeFormat} fullscreenable={false} compact showFallbackWarning />
+        </div>
+      )}
 
       <div class="form-group">
         <label class="label-caps form-label">Colore carta</label>
@@ -173,8 +262,8 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
               type="button"
               class={`color-swatch ${color.toLowerCase() === c.toLowerCase() ? 'is-selected' : ''}`}
               style={{ background: c }}
-              onClick={() => setColor(c)}
-              aria-label={`Colore ${c}`}
+              onClick={() => { setColor(c); setColorPicked(true); }}
+              aria-label={`Colore ${CARD_COLOR_NAMES[c]}`}
               aria-pressed={color.toLowerCase() === c.toLowerCase()}
             />
           ))}
@@ -182,7 +271,8 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
             <input
               type="color"
               value={color}
-              onInput={e => setColor(e.target.value)}
+              onInput={e => { setColor(e.target.value); setColorPicked(true); }}
+              aria-label="Colore personalizzato"
             />
           </label>
         </div>
@@ -197,6 +287,8 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
           rows={3}
         />
       </div>
+
+      {submitError && <p class="scan-error" role="alert">{submitError}</p>}
 
       <button type="submit" class="btn btn-primary btn-block" disabled={submitting}>
         {submitting ? 'Salvataggio...' : submitLabel}
@@ -236,12 +328,25 @@ export function CardForm({ initial, onSubmit, submitLabel = 'Salva' }) {
           border-radius: var(--radius-sm);
           color: var(--color-primary);
         }
+        .keyboard-btn {
+          font-size: var(--text-xs);
+          font-weight: 700;
+          letter-spacing: 0.04em;
+        }
         .scan-btn:active {
           background: var(--color-bg);
         }
         .scan-error {
           font-size: var(--text-sm);
           color: var(--color-danger);
+        }
+        .form-warning {
+          font-size: var(--text-sm);
+          margin-top: -12px;
+          padding: var(--space-2) var(--space-3);
+          border-left: 3px solid var(--color-accent);
+          background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+          border-radius: 4px;
         }
         .suggestions {
           position: absolute;

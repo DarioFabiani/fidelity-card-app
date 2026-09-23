@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'preact/hooks';
 import { getShareLink, shareCard, copyToClipboard, formatShareCode } from '../utils/share';
 import { ShareIcon } from './icons';
+import { useBackToClose } from '../hooks/useBackToClose';
 
 export function ShareModal({ card, onClose, showToast }) {
   const canvasRef = useRef(null);
@@ -9,12 +10,21 @@ export function ShareModal({ card, onClose, showToast }) {
   const [ready, setReady] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const [includeNotes, setIncludeNotes] = useState(false);
+  // Inline "copiato" feedback: the toast sat right over the code's hint.
+  const [copied, setCopied] = useState('');
+  useBackToClose(true, onClose);
+
+  const flashCopied = (what) => {
+    setCopied(what);
+    setTimeout(() => setCopied(c => (c === what ? '' : c)), 2000);
+  };
 
   useEffect(() => {
     let cancelled = false;
     setReady(false);
 
-    getShareLink(card).then(({ url, code }) => {
+    getShareLink(card, { includeNotes }).then(({ url, code }) => {
       if (cancelled) return;
       setShareUrl(url);
       setCode(code);
@@ -25,7 +35,7 @@ export function ShareModal({ card, onClose, showToast }) {
         import('qrcode').then(({ default: QRCode }) => {
           if (cancelled || !canvasRef.current) return;
           QRCode.toCanvas(canvasRef.current, url, {
-            width: 220,
+            width: 180,
             margin: 2,
             color: { dark: '#000000', light: '#FFFFFF' }
           });
@@ -34,7 +44,7 @@ export function ShareModal({ card, onClose, showToast }) {
     });
 
     return () => { cancelled = true; };
-  }, [card]);
+  }, [card, includeNotes]);
 
   const handleShare = async () => {
     if (!ready) return;
@@ -50,24 +60,23 @@ export function ShareModal({ card, onClose, showToast }) {
   };
 
   const handleCopyCode = async () => {
+    if (!ready) return;
     const ok = await copyToClipboard(formatShareCode(code));
-    showToast(ok ? 'Codice copiato' : 'Errore nella copia', ok ? 'success' : 'error');
+    if (ok) flashCopied('code');
+    else showToast('Errore nella copia', 'error');
   };
 
   const handleCopy = async () => {
     if (!ready) return;
     const ok = await copyToClipboard(shareUrl);
-    if (ok) {
-      showToast('Link copiato! Ricorda di comunicare anche il codice');
-    } else {
-      showToast('Errore nella copia', 'error');
-    }
+    if (ok) flashCopied('link');
+    else showToast('Errore nella copia', 'error');
   };
 
   return (
     <div class="modal-overlay" onClick={onClose}>
-      <div class="modal-content" onClick={e => e.stopPropagation()}>
-        <h3 class="share-title">
+      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="share-title" onClick={e => e.stopPropagation()}>
+        <h3 class="share-title" id="share-title">
           {sent ? 'Link inviato' : `Condividi ${card.providerName}`}
         </h3>
 
@@ -78,9 +87,21 @@ export function ShareModal({ card, onClose, showToast }) {
           <p class="share-qr-hint">Scansiona il QR code con un altro telefono</p>
         </div>
 
+        {card.notes && !sent && (
+          <label class="share-notes">
+            <input type="checkbox" checked={includeNotes} onChange={e => setIncludeNotes(e.target.checked)} />
+            <span>Includi le note nel link</span>
+          </label>
+        )}
+
         <div class={`share-code ${sent ? 'is-highlighted' : ''}`}>
           <span class="label-caps share-code-label">Codice di sblocco</span>
           <span class="share-code-value">{ready ? formatShareCode(code) : '···· ····'}</span>
+          {!sent && (
+            <button type="button" class="share-code-copy" onClick={handleCopyCode} disabled={!ready}>
+              {copied === 'code' ? 'Codice copiato ✓' : 'Copia codice'}
+            </button>
+          )}
           <p class="share-code-hint">
             {sent
               ? 'Ora comunica questo codice al destinatario, a voce o su un altro canale: senza, non può aprire il link che gli hai appena inviato.'
@@ -97,7 +118,7 @@ export function ShareModal({ card, onClose, showToast }) {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
-                Copia codice
+                {copied === 'code' ? 'Codice copiato ✓' : 'Copia codice'}
               </button>
               <button class="btn btn-outline btn-block" onClick={onClose}>
                 Fatto
@@ -115,7 +136,10 @@ export function ShareModal({ card, onClose, showToast }) {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
-                Copia link
+                {copied === 'link' ? 'Link copiato ✓ — ora comunica il codice' : 'Copia link'}
+              </button>
+              <button class="btn btn-block share-close" onClick={onClose}>
+                Chiudi
               </button>
             </>
           )}
@@ -183,6 +207,30 @@ export function ShareModal({ card, onClose, showToast }) {
             color: var(--color-danger);
             text-align: center;
             margin-bottom: var(--space-3);
+          }
+          .share-notes {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            margin-bottom: var(--space-4);
+            font-size: var(--text-sm);
+            cursor: pointer;
+          }
+          .share-notes input {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+          }
+          .share-code-copy {
+            margin-top: var(--space-2);
+            min-height: 44px;
+            padding: 0 var(--space-4);
+            font-size: var(--text-sm);
+            font-weight: 600;
+            color: var(--color-primary);
+          }
+          .share-close {
+            color: var(--color-text-secondary);
           }
           .share-actions {
             display: flex;

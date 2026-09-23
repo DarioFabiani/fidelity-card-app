@@ -217,6 +217,12 @@ input:focus, textarea:focus, select:focus {
   transform: scale(0.92);
 }
 
+/* Room under the last card for the FAB: without it the last card's star sat
+   under the button and could not be tapped. */
+.page-with-fab {
+  padding-bottom: calc(56px + var(--space-6) * 2 + env(safe-area-inset-bottom) + var(--fab-offset, 0px));
+}
+
 /* Lifts the FAB above the install banner so the two never overlap. */
 body.has-install-banner {
   --fab-offset: 68px;

@@ -1,8 +1,11 @@
+import { useBackToClose } from '../hooks/useBackToClose';
+
 export function ConfirmDialog({ title, message, confirmLabel = 'Conferma', danger = false, onConfirm, onCancel }) {
+  useBackToClose(true, onCancel);
   return (
     <div class="modal-overlay" onClick={onCancel}>
-      <div class="modal-content" onClick={e => e.stopPropagation()}>
-        <h3 class="confirm-title">{title}</h3>
+      <div class="modal-content" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" onClick={e => e.stopPropagation()}>
+        <h3 class="confirm-title" id="confirm-title">{title}</h3>
         {message && <p class="confirm-message">{message}</p>}
         <div class="confirm-actions">
           <button type="button" class="btn btn-outline btn-block" onClick={onCancel}>

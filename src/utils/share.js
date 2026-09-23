@@ -1,5 +1,9 @@
-import { deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer } from './crypto';
-import { DEFAULT_CARD_COLOR } from './color';
+import {
+  deriveKey, encryptJSON, decryptJSON, generateSalt, bufferToBase64, base64ToBuffer,
+  PBKDF2_ITERATIONS, LEGACY_PBKDF2_ITERATIONS
+} from './crypto';
+import { normalizeColor } from './color';
+import { normalizeFormat } from '../constants/barcodeFormats';
 
 // Excludes characters that are easily confused when read aloud or copied by
 // hand: 0/O, 1/I/L, 5/S, 8/B. 28 symbols, 8 of them -> ~38 bits.
@@ -45,6 +49,38 @@ function fromBase64Url(value) {
   return value.replace(/-/g, '+').replace(/_/g, '/');
 }
 
+// A link is `salt.sealed.iterations`. Links made before the count was part
+// of it are `salt.sealed` and used the legacy count. Only counts this app has
+// actually written are accepted: a range let a link cut short by one digit
+// (".600000" -> ".60000") pass as valid and fail as "wrong code", and it kept
+// a hand-crafted link from freezing the page with a huge count.
+const LINK_ITERATIONS = [PBKDF2_ITERATIONS];
+
+/** Splits a data param into its parts, or null if it has no valid shape. */
+function parseShareData(dataParam) {
+  if (typeof dataParam !== 'string' || !dataParam) return null;
+  const parts = dataParam.split('.');
+  if (parts.length !== 2 && parts.length !== 3) return null;
+  const [salt, sealed, count] = parts;
+  if (!salt || !sealed) return null;
+  let iterations = LEGACY_PBKDF2_ITERATIONS;
+  if (parts.length === 3) {
+    if (!/^[0-9]+$/.test(count)) return null;
+    iterations = Number(count);
+    if (!LINK_ITERATIONS.includes(iterations)) return null;
+  }
+  return { salt, sealed, iterations };
+}
+
+/**
+ * Whether the link carries its iteration count, as every link made by this
+ * version does. One that does not is either an older link or — much more
+ * likely — one cut short, since truncation removes the count first.
+ */
+export function hasIterationCount(dataParam) {
+  return typeof dataParam === 'string' && dataParam.split('.').length === 3;
+}
+
 /** Groups the code in two blocks so it is easier to read out: ABCD-EFGH. */
 export function formatShareCode(code) {
   return code.length === CODE_LENGTH
@@ -66,18 +102,31 @@ function normalizeShareCode(input) {
  * reopen would show the sender a code that does not belong to the link they
  * already sent, and the recipient would have no way to tell.
  *
- * Keyed by id + updatedAt so editing a card naturally retires its stale link.
+ * Keyed by id + updatedAt so editing a card naturally retires its stale link,
+ * and by whether the notes are included — those are two different links.
  * Memory only, never persisted: the code is the secret guarding a public
  * ciphertext, and writing it to disk would outlive the vault lock.
  */
 const shareLinks = new Map();
+// One code per card version, shared by the links with and without notes:
+// ticking "Includi le note" after copying the first link used to show a new
+// code, and the one already dictated no longer opened the link already sent.
+const shareCodes = new Map();
 
-export async function getShareLink(card) {
-  const key = `${card.id}:${card.updatedAt ?? ''}`;
+/** Forgets every code handed out: called when the vault locks. */
+export function clearShareLinks() {
+  shareLinks.clear();
+  shareCodes.clear();
+}
+
+export async function getShareLink(card, { includeNotes = false } = {}) {
+  const version = `${card.id}:${card.updatedAt ?? ''}`;
+  const key = `${version}:${includeNotes ? 'notes' : ''}`;
   const cached = shareLinks.get(key);
   if (cached) return cached;
 
-  const fresh = await encodeCardForShare(card);
+  if (!shareCodes.has(version)) shareCodes.set(version, generateShareCode());
+  const fresh = await encodeCardForShare(card, { includeNotes, code: shareCodes.get(version) });
   shareLinks.set(key, fresh);
   return fresh;
 }
@@ -90,25 +139,28 @@ export async function getShareLink(card) {
  * Returns both the URL (salt + ciphertext, base64) and the code to share
  * out of band.
  */
-export async function encodeCardForShare(card) {
+export async function encodeCardForShare(card, { includeNotes = true, code = generateShareCode() } = {}) {
   const payload = {
     p: card.providerName,
     n: card.cardNumber,
     f: card.barcodeFormat,
     c: card.color,
-    t: card.notes || ''
+    // Notes are personal ("PIN 1234", "tessera di mamma"): they travel only
+    // when the sender says so.
+    t: includeNotes ? card.notes || '' : ''
   };
 
-  const code = generateShareCode();
+  // Fresh salt every time, so two links sharing a code still get
+  // independent keys.
   const salt = generateSalt();
-  const key = await deriveKey(code, salt);
+  const key = await deriveKey(code, salt, PBKDF2_ITERATIONS);
   const sealed = await encryptJSON(payload, key);
 
   // base64url: standard base64 puts '+' and '/' in the string, which any
   // URLSearchParams-based reader would mangle ('+' becomes a space) and mail
   // clients like to re-encode. Swapping them keeps the link intact through
   // naive parsers, and costs nothing to reverse on the way in.
-  const combined = toBase64Url(`${bufferToBase64(salt)}.${sealed}`);
+  const combined = `${toBase64Url(`${bufferToBase64(salt)}.${sealed}`)}.${PBKDF2_ITERATIONS}`;
   const base = window.location.origin + '/fidelity-card-app/';
   return { url: `${base}shared?data=${combined}`, code };
 }
@@ -121,23 +173,27 @@ export async function encodeCardForShare(card) {
  */
 export async function decodeSharedCard(dataParam, code) {
   const secret = normalizeShareCode(code);
-  if (!dataParam || !secret) return null;
-  const separatorIndex = dataParam.indexOf('.');
-  if (separatorIndex <= 0 || separatorIndex === dataParam.length - 1) return null;
+  const parsed = parseShareData(dataParam);
+  if (!parsed || !secret) return null;
 
-  const saltB64 = fromBase64Url(dataParam.slice(0, separatorIndex));
-  const sealed = fromBase64Url(dataParam.slice(separatorIndex + 1));
+  const saltB64 = fromBase64Url(parsed.salt);
+  const sealed = fromBase64Url(parsed.sealed);
 
   try {
     const salt = base64ToBuffer(saltB64);
-    const key = await deriveKey(secret, salt);
+    const key = await deriveKey(secret, salt, parsed.iterations);
     const payload = await decryptJSON(sealed, key);
+    // Decrypting proves who made the link, not what they put in it: the
+    // fields are checked like any other outside input.
+    if (!payload || typeof payload.p !== 'string' || !payload.p || typeof payload.n !== 'string' || !payload.n) {
+      return null;
+    }
     return {
       providerName: payload.p,
       cardNumber: payload.n,
-      barcodeFormat: payload.f || 'CODE128',
-      color: payload.c || DEFAULT_CARD_COLOR,
-      notes: payload.t || ''
+      barcodeFormat: normalizeFormat(payload.f),
+      color: normalizeColor(payload.c),
+      notes: typeof payload.t === 'string' ? payload.t : ''
     };
   } catch {
     return null;
@@ -152,19 +208,18 @@ const MIN_SEALED_BYTES = 12 + 16;
 
 /**
  * Checks whether a data param has the shape produced by encodeCardForShare
- * (salt + '.' + ciphertext), without needing the code.
+ * (salt + '.' + ciphertext, plus '.' + iterations on current links),
+ * without needing the code.
  *
  * Deliberately stricter than "there is a dot in it": a link cut short by a
  * chat client still contains the separator, and reporting that as a wrong
  * code sends the recipient off re-typing a code that was right all along.
  */
 export function isValidShareData(dataParam) {
-  if (typeof dataParam !== 'string' || !dataParam) return false;
-  const separatorIndex = dataParam.indexOf('.');
-  if (separatorIndex <= 0 || separatorIndex === dataParam.length - 1) return false;
+  const parsed = parseShareData(dataParam);
+  if (!parsed) return false;
 
-  const salt = dataParam.slice(0, separatorIndex);
-  const sealed = dataParam.slice(separatorIndex + 1);
+  const { salt, sealed } = parsed;
   if (salt.length !== SALT_B64_LENGTH) return false;
 
   // base64 carries 3 bytes per 4 characters; anything shorter than IV+tag
